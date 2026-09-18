@@ -1,0 +1,31 @@
+# Foundry build artifacts
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Node
+node_modules/
+web/.next/
+web/out/
+recorder/dist/
+*.tsbuildinfo
+
+# Env and keys — never commit
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+id_rsa
+id_ed25519
+secrets/
+**/keystore/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
+npm-debug.log*

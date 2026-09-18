@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+services:
+  - type: web
+    name: arc-settlement-recorder
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./recorder/Dockerfile
+    dockerContext: ./recorder
+    healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: "0.0.0.0"
+      - key: ARC_RPC_URL
+        sync: false
+      - key: SETTLEMENT_PROOFS_ADDRESS
+        sync: false
+      - key: SETTLEMENT_RECORDER_PRIVATE_KEY
+        sync: false
+      - key: RECORDER_API_KEY
+        sync: false
+      - key: MIN_CONFIRMATIONS
+        value: "6"

@@ -1,0 +1,9 @@
+# Recorder service
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+npm-debug.log*
