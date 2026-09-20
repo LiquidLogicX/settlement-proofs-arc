@@ -1,13 +1,15 @@
 # SettlementProofs (Foundry)
 
-Append-only settlement-proof registry targeting **Arc mainnet**.
+Append-only **notarization** registry on **Arc mainnet** (Decision **1A+2B**).
 
-Payees are **public**: on-chain storage is cleartext `address payee` plus public `bytes32 srcTxHash` (the Arc settlement tx). Confidentiality / payee-commit / `viewSaltKeyId` were removed under Decision 2B.
+Payment stays on **Base**. This contract stores cleartext `address payee`, `amountUSDC` (6-decimal ERC-20 units), and public `bytes32 srcTxHash` (the **Base** payment tx). Confidentiality / payee-commit / `viewSaltKeyId` / Arc x402 settlement rail are out of scope here.
 
-| Network | chainId | RPC | Explorer |
+| Network | chainId | RPC | Explorer (human UI) |
 | --- | --- | --- | --- |
-| Arc mainnet | `5042` | `https://rpc.mainnet.arc.io` | `https://explorer.arc.io` |
+| Arc mainnet | `5042` | `https://rpc.mainnet.arc.io` | `https://explorer.arc.io` (root pages only — not `/api`) |
 | Arc testnet | `5042002` | `$ARC_TESTNET_RPC_URL` | set via your testnet explorer |
+
+**Decimals:** Arc native gas USDC = 18; Arc ERC-20 USDC @ `0x3600…0000` = 6. Proof amounts use the 6-dec unit (same as Base USDC). Mixing them mis-settles by 10^12.
 
 ## Setup
 
@@ -21,7 +23,7 @@ forge test
 
 ## Deploy / redeploy
 
-**ABI and storage changed** (1B+2B). Any previously deployed mainnet address is **obsolete**. Do not point recorder/web at an old address. Redeploy only when Miles has funded an Arc gas wallet and provided `PRIVATE_KEY` / `RECORDER_ADDRESS`. Leave `SETTLEMENT_PROOFS_ADDRESS` as TBD until then.
+Do not mainnet-redeploy until Miles has funded an Arc gas wallet and provided `PRIVATE_KEY` / `RECORDER_ADDRESS`. Leave `SETTLEMENT_PROOFS_ADDRESS` as TBD until then.
 
 ```bash
 cp .env.example .env

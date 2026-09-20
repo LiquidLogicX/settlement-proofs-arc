@@ -1,20 +1,21 @@
-# ARC-SPEC.md — status given Decisions 1B + 2B (2026-09-18)
+# ARC-SPEC.md — status given Decisions 1A + 2B (2026-09-19)
 
-> **Status header (Part 5).** Target repo is `LiquidLogicX/settlement-proofs`.
-> Foundry `SettlementProofs` contract is kept. Under **1B**, the x402-on-Arc
-> rail is **now in scope** (Circle facilitator `eip155:5042` + `exact`);
-> settlement proofs verify Arc USDC movement, not Base. Under **2B**,
-> confidentiality / payee-commit language in this spec is **dead** — public
-> `srcTxHash` + cleartext payee. Still in force: §4 decimals, §8 separation,
-> §9 preflight, §10 acceptance, §11 microgrant. Do not invent requirements
-> beyond HANDOFF-NOTE + the still-living sections below.
+> **Status header (Part 5).** Canonical repo is `LiquidLogicX/settlement-proofs-arc`.
+> Foundry `SettlementProofs` contract is kept as an Arc **notarization** registry.
+> Under **1A**, payment stays on **Base**; proofs verify Base USDC Transfers and
+> write to Arc. The x402-on-Arc rail (§5) is **out of scope** here (later on
+> `liquid-logic-agent`). Under **2B**, confidentiality / payee-commit language
+> is **dead** — public `srcTxHash` + cleartext payee. Still in force: §4 decimals
+> (typed in recorder), §8 separation, §9 preflight (RPC only — never
+> `explorer.arc.io/api`), §10 acceptance, §11 microgrant. Do not invent
+> requirements beyond HANDOFF-NOTE + the still-living sections below.
 
 ---
 
 **Settlement Proofs — Arc mainnet rail + settlement attestation**
 
-Status: draft for crew execution (updated 2026-09-18 for Decisions 1B + 2B)
-Target repo: `LiquidLogicX/settlement-proofs`
+Status: draft for crew execution (updated 2026-09-19 for Decisions 1A + 2B)
+Target repo: `LiquidLogicX/settlement-proofs-arc`
 Deadline driver: Arc Microgrants submission closes **Oct 14 2026, 23:59 ET**
 
 ---
@@ -70,7 +71,7 @@ Two things, one deploy:
 | Chain ID | `5042` (`0x13b2`) |
 | CAIP-2 | `eip155:5042` |
 | RPC | `https://rpc.mainnet.arc.io` (see §9 — may be permissioned) |
-| Explorer | `https://explorer.arc.io` (see §9) |
+| Explorer | `https://explorer.arc.io` human root only — **not** `/api` (see §9) |
 | Native gas asset | USDC |
 | USDC ERC-20 predeploy | `0x3600000000000000000000000000000000000000` |
 | Token name / version | `USDC` / `2` |
@@ -103,6 +104,9 @@ Do not take the decimals from any doc, including this one, without checking.
 ---
 
 ## 5. Settlement
+
+> **§5 OUT OF SCOPE under 1A** for this repo. Kept for historical context.
+> Arc settlement / Circle x402 lands later on `liquid-logic-agent`.
 
 Use **Circle's official x402 facilitator**, live on Arc since Sep 16 2026.
 It verifies the buyer's EIP-3009 authorization, sponsors gas, and runs

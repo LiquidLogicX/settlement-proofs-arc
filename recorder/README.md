@@ -1,17 +1,21 @@
 # Settlement recorder
 
-Hono + viem service that verifies an **Arc** USDC settlement and appends an immutable proof on **Arc**.
+Hono + viem service that verifies a **Base** USDC payment and appends an immutable **notarization** on **Arc** (Decision **1A+2B**).
 
-Payees are **public** (Decision 2B): cleartext `payee` is accepted in the authenticated write body and stored on-chain. `srcTxHash` is the Arc payment / x402 settlement transaction hash and stays public.
+Payees are **public** (Decision 2B): cleartext `payee` is accepted in the authenticated write body and stored on-chain. `srcTxHash` is the **Base** payment transaction hash and stays public. There is no confidentiality claim, no `/open`, no HMAC / `VIEW_SALT_*`.
+
+Amounts are typed: proof `amountUSDC` is `Erc20UsdcAmount` (**6** decimals). Arc recorder gas balance is `NativeUsdcWei` (**18** decimals). See `src/decimals.ts`.
 
 The recorder wallet must **not** hold treasury funds. Fund it with Arc gas only (native USDC on Arc). It cannot move the treasurer's USDC; it only calls `recordPayment` on `SettlementProofs`.
+
+Programmatic chain access uses JSON-RPC only (`BASE_RPC_URL`, `ARC_RPC_URL=https://rpc.mainnet.arc.io`). It does **not** call `explorer.arc.io/api`.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | RPC reachability, recorder address, Arc gas balance (open, no auth) |
-| `POST` | `/v1/proofs` | Verify Arc USDC tx and record a proof (**requires API key**) |
+| `POST` | `/v1/proofs` | Verify Base USDC tx and record a proof (**requires API key**) |
 
 ### Auth
 
@@ -37,11 +41,11 @@ Rate limit on write: **30**/IP/minute → **429**.
 }
 ```
 
-- `txHash` — Arc settlement transaction (required). Stored on-chain as `srcTxHash`.
-- `payee` — cleartext recipient (required). Verified against Arc USDC `Transfer` and stored on-chain.
-- `amountUSDC` — **integer** with 6 decimals (`1 USDC = 1000000`).
+- `txHash` — Base payment transaction (required). Stored on-chain as `srcTxHash`.
+- `payee` — cleartext recipient (required). Verified against Base USDC `Transfer` and stored on-chain.
+- `amountUSDC` — **integer** with **6** decimals (`1 USDC = 1000000`). Not Arc native 18-dec wei.
 - `memo` — optional string.
-- `paidAt` — optional unix seconds. If omitted, the Arc block timestamp is used.
+- `paidAt` — optional unix seconds. If omitted, the Base block timestamp is used.
 - `refId` — optional `bytes32`. If omitted, derived as Solidity `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`.
 
 Sample **201** response:
@@ -64,19 +68,22 @@ Sample **201** response:
 
 Idempotent on `refId`: a retry of the same id returns **200** with the existing proof and does not send a second Arc transaction.
 
-### Arc USDC check (strict)
+### Base USDC check (strict — no bypass)
 
-The service requires the Arc tx to be **mined**, **successful**, and to have at least `MIN_CONFIRMATIONS` (**default 6**) confirmations.
+The service requires the Base tx to be **mined**, **successful**, and to have at least `MIN_CONFIRMATIONS` (**default 12**) confirmations.
 
-It then **requires** a matching `Transfer` from Arc USDC `0x3600000000000000000000000000000000000000` to cleartext `payee` for `amountUSDC`. If the Transfer does not match, the request is **rejected with HTTP 400**. Nothing is written. There is no `ALLOW_UNVERIFIED_AMOUNT` / TxOnly path.
+It then **requires** a matching `Transfer` from [USDC on Base](https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) to cleartext `payee` for `amountUSDC`. If the Transfer does not match, the request is **rejected with HTTP 400**. Nothing is written. There is **no** `ALLOW_UNVERIFIED_AMOUNT` / TxOnly path — Part 3 removed it for good.
+
+Startup **rejects** env vars `ALLOW_UNVERIFIED_AMOUNT`, `VIEW_SALT_KEY`, `VIEW_SALT_KEY_ID`, and `VIEW_SALT_KEY_<id>`.
 
 ## Run locally
 
 ```bash
 cp .env.example .env
-# fill SETTLEMENT_PROOFS_ADDRESS, SETTLEMENT_RECORDER_PRIVATE_KEY, RECORDER_API_KEY
+# fill BASE_RPC_URL, ARC_RPC_URL, SETTLEMENT_PROOFS_ADDRESS, SETTLEMENT_RECORDER_PRIVATE_KEY, RECORDER_API_KEY
 npm install
 npm run typecheck
+npm test
 npm run build
 npm start
 ```
@@ -94,11 +101,12 @@ Use the root `render.yaml` or create a **Web Service**:
 
 Environment variables (sync: false / secret in the dashboard):
 
+- `BASE_RPC_URL`
 - `ARC_RPC_URL`
 - `SETTLEMENT_PROOFS_ADDRESS`
 - `SETTLEMENT_RECORDER_PRIVATE_KEY`
 - `RECORDER_API_KEY`
 
-Optional: `MIN_CONFIRMATIONS` (default `6`), `HOST`.
+Optional: `MIN_CONFIRMATIONS` (default `12`), `HOST`.
 
 Do not put private keys or API keys in the image, Blueprint values, or git.

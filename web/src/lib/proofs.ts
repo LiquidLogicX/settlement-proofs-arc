@@ -55,6 +55,7 @@ export function deserializeLedger(payload: SerializedLedger): LedgerSnapshot {
   };
 }
 
+/** Arc native gas USDC = 18 decimals. Proof amountUSDC stays 6-dec ERC-20 units (Base USDC). */
 function arcChain(chainId: number, rpcUrl: string) {
   return defineChain({
     id: chainId,
@@ -64,6 +65,7 @@ function arcChain(chainId: number, rpcUrl: string) {
   });
 }
 
+/** Programmatic ledger: Arc JSON-RPC only (eth_call / getLogs). Never the explorer HTTP API. */
 export async function fetchLedger(): Promise<LedgerSnapshot> {
   const config = getPublicConfig();
   if (!config.settlementProofsAddress) {

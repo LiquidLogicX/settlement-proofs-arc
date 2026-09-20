@@ -40,3 +40,12 @@ That is the empirical cross-check (no private “known wallet” was available; 
 ## Not used as evidence
 
 - Third-party docs, ARC-SPEC §4, HANDOFF-NOTE wording, Circle facilitator `decimals: 6` field (facilitator matches ERC-20 but was not the check).
+
+## Typed units in recorder (1A+2B)
+
+Runtime code must not treat “USDC on Arc” as one unit. See `recorder/src/decimals.ts`:
+
+- `Erc20UsdcAmount` — 6 decimals (Arc ERC-20 @ `0x3600…0000`, Base USDC, proof `amountUSDC`)
+- `NativeUsdcWei` — 18 decimals (Arc `eth_getBalance` / gas)
+
+Mixing them mis-settles by \(10^{12}\). Tests in `recorder/test/decimals.test.ts` fail if the two are formatted interchangeably.

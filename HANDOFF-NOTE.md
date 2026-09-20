@@ -1,9 +1,9 @@
 # HANDOFF NOTE — settlement-proofs / Arc
 
-> **FOR UPLOAD.** This file is uploaded to `LiquidLogicX/settlement-proofs`
-> using GitHub's **Add file → Upload files**. Never pasted into the web
-> editor — pasting long markdown there has silently truncated a file in this
-> project before and emptied it.
+> **Canonical repo:** `LiquidLogicX/settlement-proofs-arc`.
+> Never pasted into the web editor — pasting long markdown there has silently
+> truncated a file in this project before and emptied it.
+> Do **not** push to superseded `LiquidLogicX/settlement-proofs`.
 
 > **HOW TO READ THIS.** Every section below is tagged **FOR MILES** or
 > **FOR BOTS**. Only do the sections tagged for you. This note overrides
@@ -17,11 +17,9 @@ Two open decisions. **Nothing in Part 4 starts until both are answered.**
 
 ### Decision 1 — What is Arc actually for?
 
-- [ ] **1A — Notarization.** Payment on Base, record on Arc. This is what
-      exists today. No rebuild. Weaker Arc story for a grant reviewer.
-- [ ] **1B — Settlement on Arc.** USDC moves on Arc itself, via Circle's
-      x402 facilitator (live on Arc since Sep 16). Matches what was
-      originally said. Real rebuild work.
+- [x] **1A — Notarization.** Payment on Base, record on Arc. Locked for this repo.
+- [ ] **1B — Settlement on Arc.** Later upgrade on `liquid-logic-agent` after
+      mainnet acceptance — **out of scope** here (no Circle x402 rail in this repo).
 
 ### Decision 2 — Confidentiality
 
@@ -31,13 +29,9 @@ moves on a public chain either way. What the commit scheme actually buys is
 link, published in cleartext today. Anyone reading the ledger is one tap
 from the payee on BaseScan.
 
-- [ ] **2A — Real confidentiality.** Remove `srcTxHash` from the public
-      ledger, store a commitment to it, reveal only via the authenticated
-      open endpoint. Gains non-disclosure. **Loses public verifiability** —
-      a stranger can no longer confirm any proof is real.
-- [ ] **2B — Real verifiability.** Keep `srcTxHash` public. Delete the
-      confidentiality claim and the commit machinery with it. Smallest
-      change, honest, fewest ways to be subtly wrong.
+- [ ] **2A — Real confidentiality.** Out of scope.
+- [x] **2B — Real verifiability.** Keep `srcTxHash` public. Delete the
+      confidentiality claim and the commit machinery with it.
 
 **Recommendation: 2B now.** A grant reviewer must be able to verify
 something — that is the submission. And the commit scheme currently carries
@@ -45,9 +39,9 @@ HMAC salts, key rotation, archived key IDs and an address-guess oracle
 endpoint in service of a property it does not deliver. 2A is the right build
 when a real desk asks for non-disclosure and Arc's privacy ships. Not before.
 
-**ANSWERS:** Decision 1 = **1B** (settlement on Arc)   Decision 2 = **2B** (public `srcTxHash`; delete confidentiality claim)
+**ANSWERS (LOCKED):** Decision 1 = **1A** (notarize: Base pay → Arc registry)   Decision 2 = **2B** (public `srcTxHash`; delete confidentiality claim)
 
-Recorded 2026-09-18 by Miles.
+Recorded 2026-09-18 by Miles as 1B+2B; **re-locked 2026-09-19 to 1A+2B**. 1B (Arc settlement / Circle x402) is a later upgrade on `liquid-logic-agent` after mainnet acceptance — **out of scope** for `settlement-proofs-arc`.
 
 ---
 
@@ -105,23 +99,24 @@ read-and-sign with no contract? It was scaffolded before the spec landed.
 
 ---
 
-# PART 4 — **FOR BOTS** — UNBLOCKED (1B+2B locked) — code done, redeploy blocked on Miles
+# PART 4 — **FOR BOTS** — UNBLOCKED (1A+2B locked) — notarize + public verifiability
 
-Part 1 answers (1B + 2B) are locked. Code on branch `feat/1b-2b-arc-settlement-public-payee`:
+Part 1 answers (**1A + 2B**) are locked for `LiquidLogicX/settlement-proofs-arc` only.
 
-- Contract: cleartext `payee`; removed payee-commit / viewSalt / TxOnly; `forge test` green.
-- Recorder: verifies Arc USDC Transfer for `srcTxHash` before write; no Base-verify path; no `/open`; no `ALLOW_UNVERIFIED_AMOUNT`.
-- Web: public ledger shows cleartext payee + Arc explorer links; no confidentiality copy.
-- Docs: README / recorder / contracts / this note / ARC-SPEC status header updated.
+- Contract: cleartext `payee`; public Base `srcTxHash`; amount = 6-dec ERC-20 units; no payee-commit / viewSalt / TxOnly.
+- Recorder: verifies **Base** USDC Transfer for `srcTxHash` before write; notarizes on Arc; no `/open`; no `ALLOW_UNVERIFIED_AMOUNT`; startup rejects confidentiality / bypass env; typed decimals (`Erc20UsdcAmount` vs `NativeUsdcWei`).
+- Web: public ledger via Arc **RPC** only; BaseScan links for `srcTxHash`; Arc explorer **root** links for proof tx; no `explorer.arc.io/api`.
+- Docs: README / recorder / contracts / this note / ARC-SPEC status header updated for 1A+2B.
+- 1B (Circle x402 / Arc settlement) stays out of this repo.
 
 **Still blocked on Miles (do not spend / do not redeploy from bots):**
 
-- Circle API key for x402 facilitator
 - Arc USDC gas for deployer + recorder wallets
 - Render / Vercel egress check to `https://rpc.mainnet.arc.io` (Cursor box can reach it; hosting egress unverified — do not buy a provider)
-- Contract mainnet redeploy + wire new address into recorder/web
+- Contract mainnet deploy + wire address into recorder/web
 - Merge PR after review
 - Flip repo public (only Miles, after secret scan clean)
+- Do **not** flip any repo public from bots; do **not** touch `LiquidLogicX/settlement-proofs` (superseded)
 
 ---
 
@@ -129,10 +124,10 @@ Part 1 answers (1B + 2B) are locked. Code on branch `feat/1b-2b-arc-settlement-p
 
 Superseded — the crew made different calls before the spec landed:
 
-- Earlier draft target repo name → superseded; canonical repo is `settlement-proofs`
+- Earlier draft target repo name → superseded; canonical repo is `LiquidLogicX/settlement-proofs-arc`
 - "Prefer read-and-sign, no contract" → overridden, Foundry contract exists
 - §6 endpoint design → replaced by `POST /v1/proofs`
-- §5 x402-on-Arc rail → **in scope under 1B** (Circle facilitator; code path started; mainnet settle still needs Miles keys/gas).
+- §5 x402-on-Arc rail → **out of scope under 1A** (later on `liquid-logic-agent`).
 
 Still in force:
 

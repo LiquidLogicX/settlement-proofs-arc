@@ -1,8 +1,8 @@
 # Public settlement ledger
 
-Read-only Next.js app. It talks to Arc RPC and the `SettlementProofs` contract. There is no wallet connect.
+Read-only Next.js app. It talks to **Arc RPC** (`https://rpc.mainnet.arc.io`) and the `SettlementProofs` contract via `eth_call` / logs. There is no wallet connect and **no** `explorer.arc.io/api` dependency (Cloudflare blocks that API).
 
-The ledger shows **cleartext payee** and public **srcTxHash** (Arc settlement tx), with explorer links to `https://explorer.arc.io`. There is no confidentiality claim.
+Under **1A+2B**: payment is on **Base**; the ledger notarizes cleartext **payee** and public **srcTxHash** (Base payment tx) on Arc. Human links use BaseScan for `srcTxHash` and the Arc explorer **root pages** for the registry proof tx. There is no confidentiality claim.
 
 ```bash
 cp .env.example .env.local
@@ -17,4 +17,4 @@ Import the `web` directory as the root of a Next.js project (or set Root Directo
 
 Rebuild after changing public env vars — they are inlined at build time.
 
-**Note:** contract ABI changed under Decisions 1B+2B. Point at a redeployed registry; older confidential-payee deployments are obsolete.
+**Note:** Point at a registry deployed for cleartext payee + public `srcTxHash`. Older confidential-payee deployments are obsolete.

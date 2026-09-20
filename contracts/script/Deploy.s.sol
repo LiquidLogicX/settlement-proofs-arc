@@ -6,7 +6,7 @@ import {SettlementProofs} from "../src/SettlementProofs.sol";
 
 /// @notice Deploy SettlementProofs and grant RECORDER_ROLE to the recorder address.
 ///
-/// REDEPLOY NOTES (Part 4 / Decisions 1B+2B):
+/// DEPLOY NOTES (Part 4 / Decisions 1A+2B):
 ///   Storage layout and ABI changed — cleartext `payee` replaced `payeeCommit`;
 ///   `viewSaltKeyId` and `VerificationStatus` were removed. Any previously
 ///   deployed mainnet address is OBSOLETE. Do NOT point the recorder/web at an
