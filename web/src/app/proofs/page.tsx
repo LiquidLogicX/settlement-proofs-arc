@@ -4,7 +4,7 @@ import { fetchLedger, serializeLedger } from "@/lib/proofs";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function ProofsPage() {
   let initialData = null;
   let initialError: string | null = null;
   try {
@@ -15,15 +15,13 @@ export default async function Home() {
 
   return (
     <SiteChrome
-      active="ledger"
-      title="Settlement proofs on Arc"
+      active="proofs"
+      title="Recorded proofs"
       subtitle={
         <>
-          Public, append-only <span className="text-silver-100">settlement proofs on Arc</span>.
-          USDC payments stay on <span className="text-silver-100">Base</span>; each proof stores a
-          cleartext payee and the public Base payment{" "}
-          <code className="text-violet-200">srcTxHash</code>, with Arc explorer + BaseScan links
-          on every row. Not privacy. No wallet required to read.
+          Each row is a settlement proof on Arc: Arc proof transaction + source Base payment
+          transaction. Cleartext payee. Public <code className="text-violet-200">srcTxHash</code>.
+          Never described as privacy on Arc.
         </>
       }
     >

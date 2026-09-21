@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Arc Settlement Proofs",
+  title: "Settlement proofs on Arc",
   description:
-    "Public append-only ledger of Arc USDC settlement proofs for an AI treasurer.",
+    "Public append-only settlement proofs on Arc for an AI treasurer. Base USDC payments notarized on Arc with cleartext payee and public srcTxHash.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
