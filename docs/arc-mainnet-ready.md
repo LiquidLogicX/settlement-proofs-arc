@@ -51,21 +51,21 @@ Artifact: `contracts/broadcast/Deploy.s.sol/5042/dry-run/run-latest.json` (local
 Source payment from `LiquidLogicX/liquid-logic-agent` `data/ledger.jsonl`:
 
 ```json
-{"type":"payment","timestamp":"2026-09-15T20:38:56.825Z","amountUsdc":"0.001","network":"eip155:8453","txHash":"0x93a15735c5b82fb8c9fdc0f7db5d56916a14f6ee4ef343000a29fd55c4bcaf4c","walletAddress":"0xEA24bafbBAF6d7Ba58bE860EE906f0Fe533d167D","reason":"self-test"}
+{"type":"payment","timestamp":"2026-09-15T20:38:56.825Z","endpoint":"https://audit.liquidlogicx.com/api/allowance?wallet=0xEA24bafbBAF6d7Ba58bE860EE906f0Fe533d167D","amountUsdc":"0.001","asset":"USDC","network":"eip155:8453","txHash":"0x93a15735c5b82fb8c9fdc0f7db5d56916a14f6ee4ef343000a29fd55c4bcaf4c","basescanUrl":"https://basescan.org/tx/0x93a15735c5b82fb8c9fdc0f7db5d56916a14f6ee4ef343000a29fd55c4bcaf4c","walletAddress":"0xEA24bafbBAF6d7Ba58bE860EE906f0Fe533d167D","reason":"self-test"}
 ```
 
 Expected registry call shape (`recordPayment`):
 
 | Arg | Value |
 |-----|--------|
-| `refId` | `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))` (recorder-derived) |
+| `refId` | recorder-derived (`keccak256` of srcTxHash/payee/amount) |
 | `payee` | **cleartext** ERC-20 `Transfer` `to` on Base (must match receipt) |
 | `amountUSDC` | `1000` (0.001 × 10^6) |
 | `paidAt` | Base block timestamp for `srcTxHash` |
 | `srcTxHash` | `0x93a15735c5b82fb8c9fdc0f7db5d56916a14f6ee4ef343000a29fd55c4bcaf4c` |
-| `memo` | optional string from request |
+| `memo` | optional |
 
-**Blocker:** public Base RPCs from this host returned 403/limit; could not decode the Transfer `to` tonight. Miles should run `cast receipt $TX --rpc-url $BASE_RPC_URL` with a working Base RPC and fill `payee` before any Arc write.
+**Blocker:** public Base RPCs from this host returned 403/limit; could not decode the Transfer `to` tonight. Miles should run `cast receipt 0x93a15735c5b82fb8c9fdc0f7db5d56916a14f6ee4ef343000a29fd55c4bcaf4c --rpc-url $BASE_RPC_URL` and fill `payee` before any Arc write.
 
 ## Out of scope tonight
 
