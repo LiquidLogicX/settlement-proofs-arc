@@ -27,11 +27,10 @@ export default async function Home() {
                 Arc Settlement Proofs
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-                Public, append-only registry of{" "}
-                <span className="text-silver-100">Arc USDC</span> settlement proofs.
-                Payments settle on Arc (Circle x402 / ERC-20 USDC); each proof stores
-                cleartext payee and the public settlement <code className="text-violet-200">srcTxHash</code>.
-                No wallet required to read this ledger.
+                Public, append-only <span className="text-silver-100">notarization</span> registry on Arc.
+                Payments stay on <span className="text-silver-100">Base</span>; each proof stores
+                cleartext payee and the public Base payment <code className="text-violet-200">srcTxHash</code>.
+                No confidentiality claim. No wallet required to read this ledger.
               </p>
             </div>
           </div>
@@ -42,7 +41,7 @@ export default async function Home() {
       </main>
       <footer className="relative border-t border-white/10">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between sm:px-6 lg:px-8">
-          <span>Read-only · Arc chainId 5042 · Settlement rail is Arc USDC</span>
+          <span>Read-only · Arc chainId 5042 · 1A notarize (Base pay → Arc proof) · 2B public srcTxHash</span>
           <span>MIT License</span>
         </div>
       </footer>

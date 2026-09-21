@@ -4,12 +4,14 @@ pragma solidity ^0.8.24;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title SettlementProofs
-/// @notice Append-only registry of Arc USDC settlement proofs for an AI treasurer.
-/// @dev `srcTxHash` is the Arc payment transaction hash (where USDC moved via
-///      Circle x402 / ERC-20 Transfer on chainId 5042). Payee is stored in
-///      cleartext for public verifiability (Decision 2B). Owner
-///      (DEFAULT_ADMIN_ROLE) may grant/revoke RECORDER_ROLE only and cannot
+/// @notice Append-only notarization registry for an AI treasurer (Decision 1A+2B).
+/// @dev Payment stays on Base; this contract records an immutable proof on Arc.
+///      `srcTxHash` is the **Base** USDC payment transaction hash (public).
+///      `amountUSDC` is 6-decimal ERC-20 units (same as Base USDC / Arc ERC-20 USDC) —
+///      never Arc native gas wei (18 decimals). Payee is cleartext (Decision 2B).
+///      Owner (DEFAULT_ADMIN_ROLE) may grant/revoke RECORDER_ROLE only and cannot
 ///      write proofs. Recorded entries cannot be edited, deleted, or overridden.
+///      No Circle x402 / Arc settlement rail in this registry path (1B is out of scope).
 contract SettlementProofs is AccessControl {
     bytes32 public constant RECORDER_ROLE = keccak256("RECORDER_ROLE");
 
@@ -54,8 +56,9 @@ contract SettlementProofs is AccessControl {
     }
 
     /// @notice Record one immutable settlement proof. Only RECORDER_ROLE.
-    /// @param payee Cleartext recipient of the Arc USDC transfer (public).
-    /// @param srcTxHash Arc settlement / payment transaction hash (public).
+    /// @param payee Cleartext recipient of the Base USDC transfer (public).
+    /// @param amountUSDC Amount in 6-decimal ERC-20 USDC units (not native 18-dec wei).
+    /// @param srcTxHash Base payment transaction hash (public).
     function recordPayment(
         bytes32 refId,
         address payee,

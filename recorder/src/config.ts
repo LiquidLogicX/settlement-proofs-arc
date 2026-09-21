@@ -1,11 +1,17 @@
 import { type Address, type Hex, isAddress, isHex } from "viem";
+import { ARC_ERC20_USDC, BASE_USDC } from "./decimals.js";
 
-/** Arc mainnet ERC-20 USDC predeploy (6 decimals). See docs/decimals-empirical.md. */
-export const ARC_USDC = "0x3600000000000000000000000000000000000000" as const;
+/** @deprecated Prefer ARC_ERC20_USDC from decimals.ts (typed 6-dec ERC-20). */
+export const ARC_USDC = ARC_ERC20_USDC;
+
+export { BASE_USDC, ARC_ERC20_USDC };
 
 export type AppConfig = {
   port: number;
   host: string;
+  /** Base JSON-RPC — verify payment receipts/logs (1A). */
+  baseRpcUrl: string;
+  /** Arc JSON-RPC — eth_call / write proofs only. Never the explorer HTTP API. */
   arcRpcUrl: string;
   settlementProofsAddress: Address;
   recorderPrivateKey: Hex;
@@ -35,14 +41,37 @@ export function loadConfig(): AppConfig {
     throw new Error("SETTLEMENT_PROOFS_ADDRESS must be a valid address");
   }
 
+  // Hard reject any leftover confidentiality / bypass env — must not ship on a proof registry.
+  const banned = [
+    "ALLOW_UNVERIFIED_AMOUNT",
+    "VIEW_SALT_KEY",
+    "VIEW_SALT_KEY_ID",
+  ] as const;
+  for (const name of banned) {
+    if (process.env[name]?.trim()) {
+      throw new Error(
+        `${name} is not supported (Decision 1A+2B). Remove it from the environment.`,
+      );
+    }
+  }
+  for (const key of Object.keys(process.env)) {
+    if (/^VIEW_SALT_KEY_\d+$/.test(key) && process.env[key]?.trim()) {
+      throw new Error(
+        `${key} is not supported (Decision 2B). Remove confidentiality salts from the environment.`,
+      );
+    }
+  }
+
   return {
     port: Number(process.env.PORT ?? "10000"),
     host: process.env.HOST ?? "0.0.0.0",
+    baseRpcUrl: required("BASE_RPC_URL"),
     arcRpcUrl: required("ARC_RPC_URL"),
     settlementProofsAddress: settlementProofsAddress as Address,
     recorderPrivateKey: parsePrivateKey(required("SETTLEMENT_RECORDER_PRIVATE_KEY")),
-    // Default 6: Arc confirmations before recording a proof.
-    minConfirmations: Math.max(1, Number(process.env.MIN_CONFIRMATIONS ?? "6")),
+    // Default 12: Base mainnet reorg depth; avoid recording proofs that can be
+    // orphaned by a shallow reorganization of recent blocks.
+    minConfirmations: Math.max(1, Number(process.env.MIN_CONFIRMATIONS ?? "12")),
     recorderApiKey: required("RECORDER_API_KEY"),
   };
 }

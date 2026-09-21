@@ -17,7 +17,9 @@ arc_mainnet = "https://rpc.mainnet.arc.io"
 arc_testnet = "${ARC_TESTNET_RPC_URL}"
 base_mainnet = "${BASE_RPC_URL}"
 
-[etherscan]
-arc_mainnet = { key = "${ARCSCAN_API_KEY}", url = "https://explorer.arc.io/api", chain = 5042 }
+# explorer.arc.io/api is behind Cloudflare and must not be used for programmatic
+# verify. Runtime / CI verification uses https://rpc.mainnet.arc.io (eth_call).
+# Do not re-add an [etherscan] arc_mainnet url pointing at explorer.arc.io/api.
+# Human reviewers open https://explorer.arc.io root pages in a browser.
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

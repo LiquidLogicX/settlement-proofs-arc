@@ -19,10 +19,17 @@ import {
   deriveRefId,
   isDuplicateRefError,
   readProof,
+  readRecorderNativeGasBalance,
   serializeProof,
-  verifyArcPayment,
   writeProof,
 } from "./arc.js";
+import { createBaseClient, verifyBasePayment } from "./base.js";
+import {
+  ARC_ERC20_USDC_DECIMALS,
+  ARC_NATIVE_USDC_DECIMALS,
+  type Erc20UsdcAmount,
+  parseErc20UsdcAmount,
+} from "./decimals.js";
 
 type ProofBody = {
   refId?: string;
@@ -44,6 +51,8 @@ const arc = createArcClients({
   privateKey: config.recorderPrivateKey,
   chain: arcChainFromId(arcProbe),
 });
+
+const baseClient = createBaseClient(config.baseRpcUrl);
 
 /** Write path: 30 POSTs per IP per minute. */
 const WRITE_RATE_WINDOW_MS = 60_000;
@@ -106,17 +115,23 @@ app.get("/health", async (c) => {
   try {
     const [arcId, recorderBalance] = await Promise.all([
       arc.publicClient.getChainId(),
-      arc.publicClient.getBalance({ address: arc.account.address }),
+      readRecorderNativeGasBalance({
+        publicClient: arc.publicClient,
+        address: arc.account.address,
+      }),
     ]);
     return c.json({
       ok: true,
       recorder: arc.account.address,
       settlementProofs: config.settlementProofsAddress,
       arcChainId: arcId,
+      /** Native gas USDC wei (18 decimals) — not ERC-20 6-dec units. */
       recorderArcBalanceWei: recorderBalance.toString(),
+      recorderArcBalanceDecimals: ARC_NATIVE_USDC_DECIMALS,
+      proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
       minConfirmations: config.minConfirmations,
-      settlementRail: "arc-usdc",
-      note: "Recorder holds no treasury funds; Arc balance is gas (native USDC) only. Verifies Arc USDC Transfer for srcTxHash, then records cleartext payee + public srcTxHash.",
+      settlementRail: "base-usdc-notarize-arc",
+      note: "1A notarize: payment on Base, proof on Arc. Verifies Base USDC Transfer for srcTxHash (6-dec ERC-20), then records cleartext payee + public srcTxHash. Arc balance is gas only (native USDC, 18-dec). No confidentiality; no ALLOW_UNVERIFIED_AMOUNT.",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -163,8 +178,8 @@ app.post("/v1/proofs", async (c) => {
       });
     }
 
-    const verified = await verifyArcPayment({
-      client: arc.publicClient,
+    const verified = await verifyBasePayment({
+      client: baseClient,
       txHash,
       payee,
       amountUSDC,
@@ -242,27 +257,27 @@ function parseBody(body: ProofBody):
       refId?: Hex;
       txHash: Hex;
       payee: Address;
-      amountUSDC: bigint;
+      amountUSDC: Erc20UsdcAmount;
       memo: string;
       paidAt?: number;
     } {
   if (!body.txHash || !isHash(body.txHash)) {
-    return { error: "txHash must be a 32-byte 0x-prefixed Arc settlement transaction hash" };
+    return { error: "txHash must be a 32-byte 0x-prefixed Base payment transaction hash" };
   }
   if (!body.payee || !isAddress(body.payee)) {
     return { error: "payee must be a valid address" };
   }
   if (body.amountUSDC === undefined || body.amountUSDC === "") {
-    return { error: "amountUSDC is required (integer, 6 decimals; 1 USDC = 1000000)" };
+    return {
+      error:
+        "amountUSDC is required (integer, 6-decimal ERC-20 units; 1 USDC = 1000000). Not Arc native 18-dec wei.",
+    };
   }
-  let amountUSDC: bigint;
+  let amountUSDC: Erc20UsdcAmount;
   try {
-    amountUSDC = BigInt(body.amountUSDC);
-  } catch {
-    return { error: "amountUSDC must be an integer string (6 decimals)" };
-  }
-  if (amountUSDC <= 0n) {
-    return { error: "amountUSDC must be > 0" };
+    amountUSDC = parseErc20UsdcAmount(body.amountUSDC);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
   }
 
   let refId: Hex | undefined;
@@ -302,7 +317,9 @@ console.log(
     settlementProofs: config.settlementProofsAddress,
     arcChainId: arcProbe,
     minConfirmations: config.minConfirmations,
-    settlementRail: "arc-usdc",
+    settlementRail: "base-usdc-notarize-arc",
+    proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
+    nativeGasDecimals: ARC_NATIVE_USDC_DECIMALS,
   }),
 );
 

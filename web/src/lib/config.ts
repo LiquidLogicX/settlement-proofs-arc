@@ -3,8 +3,11 @@ import { type Address, isAddress } from "viem";
 export type PublicConfig = {
   arcRpcUrl: string;
   settlementProofsAddress: Address | null;
+  /** Human UI only (root pages). Programmatic verify uses arcRpcUrl — never the explorer HTTP API. */
   arcExplorer: string;
   arcChainId: number;
+  /** BaseScan root for public srcTxHash (1A: payment on Base). */
+  baseExplorer: string;
 };
 
 function stripSlash(url: string) {
@@ -20,6 +23,9 @@ export function getPublicConfig(): PublicConfig {
       process.env.NEXT_PUBLIC_ARC_EXPLORER?.trim() || "https://explorer.arc.io",
     ),
     arcChainId: Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? "5042"),
+    baseExplorer: stripSlash(
+      process.env.NEXT_PUBLIC_BASE_EXPLORER?.trim() || "https://basescan.org",
+    ),
   };
 }
 
@@ -31,6 +37,15 @@ export function arcAddressUrl(explorer: string, address: string) {
   return `${explorer}/address/${address}`;
 }
 
+export function baseTxUrl(explorer: string, hash: string) {
+  return `${explorer}/tx/${hash}`;
+}
+
+export function baseAddressUrl(explorer: string, address: string) {
+  return `${explorer}/address/${address}`;
+}
+
+/** Proof amounts are always 6-decimal ERC-20 USDC units (Base payment / registry). */
 export function formatUsdc(amount: bigint): string {
   const negative = amount < BigInt(0);
   const value = negative ? -amount : amount;

@@ -16,6 +16,8 @@ import {
 import {
   arcAddressUrl,
   arcTxUrl,
+  baseAddressUrl,
+  baseTxUrl,
   formatPaidAt,
   formatUsdc,
   getPublicConfig,
@@ -100,7 +102,7 @@ export function Ledger({
         <StatCard
           label="Total settled"
           value={data ? `${formatUsdc(data.totalSettled)} USDC` : "—"}
-          hint="Sum of amountUSDC on Arc"
+          hint="Sum of notarized Base USDC (6-dec ERC-20 units)"
         />
         <StatCard
           label="Proofs"
@@ -150,8 +152,8 @@ export function Ledger({
       {data && data.proofs.length === 0 ? (
         <Card className="border-dashed border-white/15 bg-card/50">
           <CardContent className="py-12 text-center text-muted-foreground">
-            No settlement proofs recorded yet. When the treasurer settles USDC on Arc, the
-            recorder appends an immutable proof here.
+            No settlement proofs recorded yet. When the treasurer pays USDC on Base, the
+            recorder notarizes an immutable proof on Arc here.
           </CardContent>
         </Card>
       ) : null}
@@ -214,7 +216,7 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
       </TableCell>
       <TableCell>
         <a
-          href={arcAddressUrl(config.arcExplorer, proof.payee)}
+          href={baseAddressUrl(config.baseExplorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
           className="font-mono text-sm text-violet-200 hover:text-violet-100"
@@ -248,7 +250,7 @@ function ProofCard({ proof }: { proof: LedgerProof }) {
           </div>
         </div>
         <a
-          href={arcAddressUrl(config.arcExplorer, proof.payee)}
+          href={baseAddressUrl(config.baseExplorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
           className="font-mono text-sm text-violet-200 hover:text-violet-100"
@@ -273,12 +275,12 @@ function ProofLinks({ proof }: { proof: LedgerProof }) {
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <a
-        href={arcTxUrl(config.arcExplorer, proof.srcTxHash)}
+        href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
         target="_blank"
         rel="noreferrer"
         className="inline-flex items-center gap-1 text-xs text-violet-300 hover:text-violet-100"
       >
-        Arc settlement
+        Base payment
         <ExternalLink className="size-3" />
       </a>
       <a
