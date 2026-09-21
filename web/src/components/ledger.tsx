@@ -15,14 +15,13 @@ import {
 } from "@/components/ui/table";
 import {
   arcAddressUrl,
-  arcTxUrl,
   baseAddressUrl,
-  baseTxUrl,
   formatPaidAt,
   formatUsdc,
   getPublicConfig,
   shortenAddress,
 } from "@/lib/config";
+import { ProofExplorerLinks } from "@/components/proof-links";
 import {
   deserializeLedger,
   type LedgerProof,
@@ -233,7 +232,7 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
         {proof.memo || "—"}
       </TableCell>
       <TableCell className="text-right">
-        <ProofLinks proof={proof} />
+        <ProofExplorerLinks proof={proof} />
       </TableCell>
     </TableRow>
   );
@@ -259,39 +258,9 @@ function ProofCard({ proof }: { proof: LedgerProof }) {
           {shortenAddress(proof.payee)}
         </a>
         <p className="text-sm text-silver-200">{proof.memo || "No memo"}</p>
-        <ProofLinks proof={proof} />
+        <ProofExplorerLinks proof={proof} />
       </CardContent>
     </Card>
   );
 }
 
-function ProofLinks({ proof }: { proof: LedgerProof }) {
-  const proofHref = proof.proofTxHash
-    ? arcTxUrl(config.arcExplorer, proof.proofTxHash)
-    : config.settlementProofsAddress
-      ? arcAddressUrl(config.arcExplorer, config.settlementProofsAddress)
-      : config.arcExplorer;
-
-  return (
-    <div className="flex flex-wrap justify-end gap-2">
-      <a
-        href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-violet-300 hover:text-violet-100"
-      >
-        Base payment
-        <ExternalLink className="size-3" />
-      </a>
-      <a
-        href={proofHref}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-silver-300 hover:text-silver-100"
-      >
-        {proof.proofTxHash ? "Proof tx" : "Arc contract"}
-        <ExternalLink className="size-3" />
-      </a>
-    </div>
-  );
-}
