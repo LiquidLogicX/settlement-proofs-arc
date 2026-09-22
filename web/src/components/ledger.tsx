@@ -22,8 +22,10 @@ import {
   shortenAddress,
 } from "@/lib/config";
 import { ProofExplorerLinks } from "@/components/proof-links";
+import { Badge } from "@/components/ui/badge";
 import {
   deserializeLedger,
+  isSelfTestMemo,
   type LedgerProof,
   type LedgerSnapshot,
   type SerializedLedger,
@@ -228,8 +230,15 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
         {formatUsdc(proof.amountUSDC)}{" "}
         <span className="text-muted-foreground">USDC</span>
       </TableCell>
-      <TableCell className="max-w-xs truncate text-silver-200" title={proof.memo}>
-        {proof.memo || "—"}
+      <TableCell className="max-w-xs text-silver-200" title={proof.memo}>
+        <span className="inline-flex max-w-full items-center gap-2">
+          <span className="truncate">{proof.memo || "—"}</span>
+          {isSelfTestMemo(proof.memo) ? (
+            <Badge className="shrink-0 border-amber-400/50 bg-amber-400/15 text-amber-100">
+              Self-test
+            </Badge>
+          ) : null}
+        </span>
       </TableCell>
       <TableCell className="text-right">
         <ProofExplorerLinks proof={proof} />
@@ -257,7 +266,14 @@ function ProofCard({ proof }: { proof: LedgerProof }) {
         >
           {shortenAddress(proof.payee)}
         </a>
-        <p className="text-sm text-silver-200">{proof.memo || "No memo"}</p>
+        <p className="flex flex-wrap items-center gap-2 text-sm text-silver-200">
+          <span>{proof.memo || "No memo"}</span>
+          {isSelfTestMemo(proof.memo) ? (
+            <Badge className="border-amber-400/50 bg-amber-400/15 text-amber-100">
+              Self-test
+            </Badge>
+          ) : null}
+        </p>
         <ProofExplorerLinks proof={proof} />
       </CardContent>
     </Card>

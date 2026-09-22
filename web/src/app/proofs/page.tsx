@@ -1,10 +1,18 @@
 import { Ledger } from "@/components/ledger";
 import { SiteChrome } from "@/components/site-chrome";
+import { Verifier } from "@/components/verifier";
 import { fetchLedger, serializeLedger } from "@/lib/proofs";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProofsPage() {
+type PageProps = {
+  searchParams: Promise<{ q?: string; query?: string }>;
+};
+
+export default async function ProofsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const initialQuery = (params.q ?? params.query ?? "").trim();
+
   let initialData = null;
   let initialError: string | null = null;
   try {
@@ -16,16 +24,30 @@ export default async function ProofsPage() {
   return (
     <SiteChrome
       active="proofs"
-      title="Recorded proofs"
+      title="Verify a proof"
       subtitle={
         <>
-          Each row is a settlement proof on Arc: Arc proof transaction + source Base payment
-          transaction. Cleartext payee. Public <code className="text-violet-200">srcTxHash</code>.
-          Not a privacy product.
+          Public verifier for settlement proofs on Arc. Look up by settlement ID (
+          <code className="text-violet-200">refId</code>), Arc proof tx, or Base{" "}
+          <code className="text-violet-200">srcTxHash</code>. Cleartext payee. Real Arc RPC data
+          only. Not a privacy product.
         </>
       }
     >
-      <Ledger initialData={initialData} initialError={initialError} />
+      <div className="space-y-12">
+        <Verifier initialQuery={initialQuery} />
+
+        <section className="space-y-4 border-t border-white/10 pt-10">
+          <div>
+            <h2 className="text-xl font-semibold text-silver-50">Recorded proofs ledger</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Full append-only list from the same Arc registry. Filter locally or open a row&apos;s
+              detail page.
+            </p>
+          </div>
+          <Ledger initialData={initialData} initialError={initialError} />
+        </section>
+      </div>
     </SiteChrome>
   );
 }

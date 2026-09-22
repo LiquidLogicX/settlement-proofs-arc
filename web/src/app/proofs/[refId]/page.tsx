@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import { SiteChrome } from "@/components/site-chrome";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   arcAddressUrl,
@@ -12,7 +13,7 @@ import {
   formatUsdc,
   getPublicConfig,
 } from "@/lib/config";
-import { fetchLedger } from "@/lib/proofs";
+import { fetchProofByRefId, isSelfTestMemo } from "@/lib/proofs";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +23,13 @@ type PageProps = {
 
 export default async function ProofDetailPage({ params }: PageProps) {
   const { refId: rawRefId } = await params;
-  const refId = decodeURIComponent(rawRefId).toLowerCase();
   const config = getPublicConfig();
 
   let error: string | null = null;
-  let proof: Awaited<ReturnType<typeof fetchLedger>>["proofs"][number] | undefined;
+  let proof: Awaited<ReturnType<typeof fetchProofByRefId>> = null;
 
   try {
-    const ledger = await fetchLedger();
-    proof = ledger.proofs.find((p) => p.refId.toLowerCase() === refId);
+    proof = await fetchProofByRefId(rawRefId);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
@@ -39,6 +38,8 @@ export default async function ProofDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  const selfTest = proof ? isSelfTestMemo(proof.memo) : false;
+
   return (
     <SiteChrome
       active="proofs"
@@ -46,13 +47,13 @@ export default async function ProofDetailPage({ params }: PageProps) {
       subtitle={
         <>
           Settlement proof on Arc with explorer links for the Arc record and the source Base
-          payment. Public notarization — payee and srcTxHash are cleartext.
+          payment. Public notarization — payee and srcTxHash are cleartext. Not a privacy product.
         </>
       }
     >
       <div className="mb-6">
         <Link href="/proofs" className="text-sm text-violet-300 hover:text-violet-100">
-          ← All proofs
+          ← Verifier &amp; all proofs
         </Link>
       </div>
 
@@ -65,9 +66,16 @@ export default async function ProofDetailPage({ params }: PageProps) {
       {proof ? (
         <Card className="border-violet-500/25 bg-card/90">
           <CardHeader>
-            <p className="text-xs tracking-[0.2em] text-violet-300 uppercase">
-              Settlement proof on Arc
-            </p>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <p className="text-xs tracking-[0.2em] text-violet-300 uppercase">
+                Settlement proof on Arc
+              </p>
+              {selfTest ? (
+                <Badge className="border-amber-400/50 bg-amber-400/15 text-amber-100">
+                  Self-test
+                </Badge>
+              ) : null}
+            </div>
             <CardTitle className="font-mono text-3xl text-silver-50">
               {formatUsdc(proof.amountUSDC)} USDC
             </CardTitle>
