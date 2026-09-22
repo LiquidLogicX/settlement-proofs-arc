@@ -17,6 +17,27 @@ export const metadata: Metadata = {
   title: "Settlement proofs on Arc",
   description:
     "Public append-only settlement proofs on Arc for an AI treasurer. Base USDC payments notarized on Arc with cleartext payee and public srcTxHash.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+      { url: "/llx-logo.png", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  openGraph: {
+    title: "Settlement proofs on Arc",
+    description:
+      "Public append-only settlement proofs on Arc for an AI treasurer.",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Liquid Logic X" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Settlement proofs on Arc",
+    description:
+      "Public append-only settlement proofs on Arc for an AI treasurer.",
+    images: ["/og.png"],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
