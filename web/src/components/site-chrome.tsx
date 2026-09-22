@@ -20,9 +20,18 @@ export function SiteChrome({
       <header className="relative border-b border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs tracking-[0.35em] text-llx-label uppercase">
-              Settlement proofs on Arc
-            </p>
+            <div className="flex items-center gap-3">
+              <img
+                src="/llx-logo.png"
+                width={40}
+                height={40}
+                alt="Liquid Logic X"
+                className="h-10 w-10 rounded-full object-cover"
+              />
+              <p className="text-xs tracking-[0.35em] text-llx-label uppercase">
+                Settlement proofs on Arc
+              </p>
+            </div>
             <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1 text-sm">
               <NavLink href="/" active={active === "ledger"}>
                 Ledger
