@@ -77,6 +77,13 @@ export const settlementProofsAbi = [
     stateMutability: "view",
   },
   {
+    type: "function",
+    name: "exists",
+    inputs: [{ name: "refId", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
     type: "event",
     name: "PaymentRecorded",
     inputs: [

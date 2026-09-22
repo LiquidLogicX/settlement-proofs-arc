@@ -1,11 +1,20 @@
 import {
+  type Address,
   type Hex,
+  type PublicClient,
   createPublicClient,
   defineChain,
   http,
+  parseEventLogs,
 } from "viem";
 import { settlementProofsAbi } from "./abi";
 import { getPublicConfig } from "./config";
+
+/** Memo used by the Arc self-test payment (0.001 USDC). */
+export const SELF_TEST_MEMO = "llx-self-test-0.001";
+
+/** Max proofs scanned when matching an input as Base srcTxHash (newest-first). */
+export const SRC_TX_SCAN_LIMIT = 64;
 
 export type LedgerProof = {
   refId: Hex;
@@ -33,14 +42,59 @@ export type SerializedLedger = {
   proofs: SerializedProof[];
 };
 
+export type ProofQueryKind = "refId" | "arcTx" | "srcTxHash";
+
+export type ProofLookupResult =
+  | { status: "invalid"; message: string }
+  | { status: "not_found"; message: string; query: Hex }
+  | {
+      status: "found";
+      query: Hex;
+      queryKind: ProofQueryKind;
+      proof: LedgerProof;
+      selfTest: boolean;
+    };
+
+export type SerializedLookupResult =
+  | { status: "invalid"; message: string }
+  | { status: "not_found"; message: string; query: Hex }
+  | {
+      status: "found";
+      query: Hex;
+      queryKind: ProofQueryKind;
+      proof: SerializedProof;
+      selfTest: boolean;
+    };
+
+type RawProof = {
+  refId: Hex;
+  payee: Address;
+  amountUSDC: bigint;
+  paidAt: bigint | number;
+  srcTxHash: Hex;
+  memo: string;
+  recordedAt: bigint | number;
+};
+
+export function serializeProof(proof: LedgerProof): SerializedProof {
+  return {
+    ...proof,
+    amountUSDC: proof.amountUSDC.toString(),
+  };
+}
+
+export function deserializeProof(proof: SerializedProof): LedgerProof {
+  return {
+    ...proof,
+    amountUSDC: BigInt(proof.amountUSDC),
+  };
+}
+
 export function serializeLedger(snapshot: LedgerSnapshot): SerializedLedger {
   return {
     proofCount: snapshot.proofCount.toString(),
     totalSettled: snapshot.totalSettled.toString(),
-    proofs: snapshot.proofs.map((proof) => ({
-      ...proof,
-      amountUSDC: proof.amountUSDC.toString(),
-    })),
+    proofs: snapshot.proofs.map(serializeProof),
   };
 }
 
@@ -48,11 +102,47 @@ export function deserializeLedger(payload: SerializedLedger): LedgerSnapshot {
   return {
     proofCount: BigInt(payload.proofCount),
     totalSettled: BigInt(payload.totalSettled),
-    proofs: payload.proofs.map((proof) => ({
-      ...proof,
-      amountUSDC: BigInt(proof.amountUSDC),
-    })),
+    proofs: payload.proofs.map(deserializeProof),
   };
+}
+
+export function serializeLookup(result: ProofLookupResult): SerializedLookupResult {
+  if (result.status === "found") {
+    return {
+      status: "found",
+      query: result.query,
+      queryKind: result.queryKind,
+      proof: serializeProof(result.proof),
+      selfTest: result.selfTest,
+    };
+  }
+  return result;
+}
+
+export function deserializeLookup(payload: SerializedLookupResult): ProofLookupResult {
+  if (payload.status === "found") {
+    return {
+      status: "found",
+      query: payload.query,
+      queryKind: payload.queryKind,
+      proof: deserializeProof(payload.proof),
+      selfTest: payload.selfTest,
+    };
+  }
+  return payload;
+}
+
+export function isSelfTestMemo(memo: string): boolean {
+  return memo.trim() === SELF_TEST_MEMO;
+}
+
+/** Accept 0x-prefixed or bare 32-byte hex (refId or tx hash). */
+export function normalizeBytes32Query(raw: string): Hex | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const with0x = /^0x/i.test(trimmed) ? trimmed : `0x${trimmed}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(with0x)) return null;
+  return with0x.toLowerCase() as Hex;
 }
 
 /** Arc native gas USDC = 18 decimals. Proof amountUSDC stays 6-dec ERC-20 units (Base USDC). */
@@ -65,8 +155,12 @@ function arcChain(chainId: number, rpcUrl: string) {
   });
 }
 
-/** Programmatic ledger: Arc JSON-RPC only (eth_call / getLogs). Never the explorer HTTP API. */
-export async function fetchLedger(): Promise<LedgerSnapshot> {
+type ArcContext = {
+  client: PublicClient;
+  address: Address;
+};
+
+function requireArcContext(): ArcContext {
   const config = getPublicConfig();
   if (!config.settlementProofsAddress) {
     throw new Error("NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS is not set to a valid address.");
@@ -77,7 +171,66 @@ export async function fetchLedger(): Promise<LedgerSnapshot> {
     transport: http(config.arcRpcUrl),
   });
 
-  const address = config.settlementProofsAddress;
+  return { client, address: config.settlementProofsAddress };
+}
+
+function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
+  return {
+    refId: raw.refId,
+    payee: raw.payee,
+    amountUSDC: raw.amountUSDC,
+    paidAt: Number(raw.paidAt),
+    srcTxHash: raw.srcTxHash,
+    memo: raw.memo,
+    recordedAt: Number(raw.recordedAt),
+    proofTxHash,
+  };
+}
+
+async function findProofTxByRef(
+  client: PublicClient,
+  address: Address,
+  refId: Hex,
+): Promise<Hex | null> {
+  try {
+    const logs = await client.getContractEvents({
+      address,
+      abi: settlementProofsAbi,
+      eventName: "PaymentRecorded",
+      args: { refId },
+      fromBlock: BigInt(0),
+      toBlock: "latest",
+    });
+    for (const log of logs) {
+      if (log.transactionHash) return log.transactionHash;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function readProofByRef(
+  client: PublicClient,
+  address: Address,
+  refId: Hex,
+  proofTxHash?: Hex | null,
+): Promise<LedgerProof> {
+  const raw = await client.readContract({
+    address,
+    abi: settlementProofsAbi,
+    functionName: "getProof",
+    args: [refId],
+  });
+  const tx =
+    proofTxHash !== undefined ? proofTxHash : await findProofTxByRef(client, address, refId);
+  return toLedgerProof(raw, tx);
+}
+
+/** Programmatic ledger: Arc JSON-RPC only (eth_call / getLogs). Never the explorer HTTP API. */
+export async function fetchLedger(): Promise<LedgerSnapshot> {
+  const { client, address } = requireArcContext();
+
   const [proofCount, totalSettled] = await Promise.all([
     client.readContract({ address, abi: settlementProofsAbi, functionName: "proofCount" }),
     client.readContract({ address, abi: settlementProofsAbi, functionName: "totalSettled" }),
@@ -117,17 +270,137 @@ export async function fetchLedger(): Promise<LedgerSnapshot> {
   }
 
   const proofs: LedgerProof[] = rawProofs
-    .map((proof) => ({
-      refId: proof.refId,
-      payee: proof.payee,
-      amountUSDC: proof.amountUSDC,
-      paidAt: Number(proof.paidAt),
-      srcTxHash: proof.srcTxHash,
-      memo: proof.memo,
-      recordedAt: Number(proof.recordedAt),
-      proofTxHash: proofTxByRef.get(proof.refId.toLowerCase()) ?? null,
-    }))
+    .map((proof) =>
+      toLedgerProof(proof, proofTxByRef.get(proof.refId.toLowerCase()) ?? null),
+    )
     .sort((a, b) => b.paidAt - a.paidAt || Number(b.recordedAt) - Number(a.recordedAt));
 
   return { proofCount, totalSettled, proofs };
+}
+
+/**
+ * Public verifier lookup (read-only Arc RPC).
+ * Order: treat input as refId (exists/getProof) → Arc receipt PaymentRecorded →
+ * bounded newest-first scan for matching srcTxHash.
+ */
+export async function lookupProof(rawQuery: string): Promise<ProofLookupResult> {
+  const query = normalizeBytes32Query(rawQuery);
+  if (!query) {
+    return {
+      status: "invalid",
+      message:
+        "Enter a 32-byte hex settlement ID (refId) or transaction hash (0x + 64 hex chars).",
+    };
+  }
+
+  const { client, address } = requireArcContext();
+
+  const exists = await client.readContract({
+    address,
+    abi: settlementProofsAbi,
+    functionName: "exists",
+    args: [query],
+  });
+
+  if (exists) {
+    const proof = await readProofByRef(client, address, query);
+    return {
+      status: "found",
+      query,
+      queryKind: "refId",
+      proof,
+      selfTest: isSelfTestMemo(proof.memo),
+    };
+  }
+
+  // Try as Arc recordPayment tx hash via receipt logs.
+  try {
+    const receipt = await client.getTransactionReceipt({ hash: query });
+    const events = parseEventLogs({
+      abi: settlementProofsAbi,
+      logs: receipt.logs,
+      eventName: "PaymentRecorded",
+    });
+    const match = events.find(
+      (event) => event.address.toLowerCase() === address.toLowerCase() && event.args.refId,
+    );
+    if (match?.args.refId) {
+      const proof = await readProofByRef(
+        client,
+        address,
+        match.args.refId,
+        receipt.transactionHash,
+      );
+      return {
+        status: "found",
+        query,
+        queryKind: "arcTx",
+        proof,
+        selfTest: isSelfTestMemo(proof.memo),
+      };
+    }
+  } catch {
+    // Not an Arc tx we can read, or RPC error — fall through to srcTxHash scan.
+  }
+
+  // Bounded scan: match Base payment srcTxHash (newest indices first).
+  const proofCount = await client.readContract({
+    address,
+    abi: settlementProofsAbi,
+    functionName: "proofCount",
+  });
+  const count = Number(proofCount);
+  if (count > 0) {
+    const scan = Math.min(count, SRC_TX_SCAN_LIMIT);
+    const start = count - scan;
+    const rawProofs = await Promise.all(
+      Array.from({ length: scan }, (_, offset) => {
+        const index = start + offset;
+        return client.readContract({
+          address,
+          abi: settlementProofsAbi,
+          functionName: "getProofAt",
+          args: [BigInt(index)],
+        });
+      }),
+    );
+
+    for (let i = rawProofs.length - 1; i >= 0; i--) {
+      const raw = rawProofs[i];
+      if (raw.srcTxHash.toLowerCase() === query) {
+        const proofTxHash = await findProofTxByRef(client, address, raw.refId);
+        const proof = toLedgerProof(raw, proofTxHash);
+        return {
+          status: "found",
+          query,
+          queryKind: "srcTxHash",
+          proof,
+          selfTest: isSelfTestMemo(proof.memo),
+        };
+      }
+    }
+  }
+
+  return {
+    status: "not_found",
+    query,
+    message:
+      "No settlement proof found for that ID or transaction hash on the Arc registry (checked refId, Arc receipt logs, and recent srcTxHash matches).",
+  };
+}
+
+/** Fetch a single proof by refId for the detail page. Returns null if missing. */
+export async function fetchProofByRefId(rawRefId: string): Promise<LedgerProof | null> {
+  const refId = normalizeBytes32Query(rawRefId);
+  if (!refId) return null;
+
+  const { client, address } = requireArcContext();
+  const exists = await client.readContract({
+    address,
+    abi: settlementProofsAbi,
+    functionName: "exists",
+    args: [refId],
+  });
+  if (!exists) return null;
+  return readProofByRef(client, address, refId);
 }
