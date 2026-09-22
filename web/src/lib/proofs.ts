@@ -187,27 +187,79 @@ function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
   };
 }
 
+/**
+ * Arc public RPC caps eth_getLogs to a ~10_000-block range (span 10_000 fails;
+ * span 9_999 works). Walk newest→oldest in LOG_CHUNK_SIZE windows.
+ */
+const LOG_CHUNK_SIZE = BigInt(9_000);
+/** Max windows from tip (~2.3M blocks). Enough for current registry depth. */
+const LOG_MAX_WINDOWS = 256;
+
+async function scanPaymentRecordedTxMap(
+  client: PublicClient,
+  address: Address,
+  options?: {
+    refId?: Hex;
+    /** Stop once every lowercase refId in this set is mapped. */
+    neededRefIds?: Set<string>;
+  },
+): Promise<Map<string, Hex>> {
+  const map = new Map<string, Hex>();
+  const needed = options?.neededRefIds;
+
+  try {
+    let toBlock = await client.getBlockNumber();
+
+    for (let window = 0; window < LOG_MAX_WINDOWS; window++) {
+      const fromBlock =
+        toBlock + BigInt(1) >= LOG_CHUNK_SIZE ? toBlock - (LOG_CHUNK_SIZE - BigInt(1)) : BigInt(0);
+
+      const logs = await client.getContractEvents({
+        address,
+        abi: settlementProofsAbi,
+        eventName: "PaymentRecorded",
+        args: options?.refId ? { refId: options.refId } : undefined,
+        fromBlock,
+        toBlock,
+      });
+
+      for (const log of logs) {
+        if (log.transactionHash && log.args.refId) {
+          map.set(log.args.refId.toLowerCase(), log.transactionHash);
+        }
+      }
+
+      if (options?.refId && map.has(options.refId.toLowerCase())) {
+        break;
+      }
+      if (needed && needed.size > 0) {
+        let allFound = true;
+        for (const id of needed) {
+          if (!map.has(id)) {
+            allFound = false;
+            break;
+          }
+        }
+        if (allFound) break;
+      }
+
+      if (fromBlock === BigInt(0)) break;
+      toBlock = fromBlock - BigInt(1);
+    }
+  } catch {
+    // Return whatever was collected before the RPC error.
+  }
+
+  return map;
+}
+
 async function findProofTxByRef(
   client: PublicClient,
   address: Address,
   refId: Hex,
 ): Promise<Hex | null> {
-  try {
-    const logs = await client.getContractEvents({
-      address,
-      abi: settlementProofsAbi,
-      eventName: "PaymentRecorded",
-      args: { refId },
-      fromBlock: BigInt(0),
-      toBlock: "latest",
-    });
-    for (const log of logs) {
-      if (log.transactionHash) return log.transactionHash;
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  const map = await scanPaymentRecordedTxMap(client, address, { refId });
+  return map.get(refId.toLowerCase()) ?? null;
 }
 
 async function readProofByRef(
@@ -251,23 +303,11 @@ export async function fetchLedger(): Promise<LedgerSnapshot> {
           ),
         );
 
-  let proofTxByRef = new Map<string, Hex>();
-  try {
-    const logs = await client.getContractEvents({
-      address,
-      abi: settlementProofsAbi,
-      eventName: "PaymentRecorded",
-      fromBlock: BigInt(0),
-      toBlock: "latest",
-    });
-    for (const log of logs) {
-      if (log.transactionHash && log.args.refId) {
-        proofTxByRef.set(log.args.refId.toLowerCase(), log.transactionHash);
-      }
-    }
-  } catch {
-    proofTxByRef = new Map();
-  }
+  const neededRefIds = new Set(rawProofs.map((proof) => proof.refId.toLowerCase()));
+  const proofTxByRef =
+    neededRefIds.size === 0
+      ? new Map<string, Hex>()
+      : await scanPaymentRecordedTxMap(client, address, { neededRefIds });
 
   const proofs: LedgerProof[] = rawProofs
     .map((proof) =>

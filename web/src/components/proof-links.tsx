@@ -25,7 +25,7 @@ export function ProofExplorerLinks({
         href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-200 hover:border-violet-400/50 hover:text-violet-50"
+        className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-llx-link hover:text-foreground"
         title={proof.srcTxHash}
       >
         Base payment tx
@@ -36,7 +36,7 @@ export function ProofExplorerLinks({
           href={arcTxUrl(config.arcExplorer, proof.proofTxHash)}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-2.5 py-1 text-xs text-fuchsia-100 hover:border-fuchsia-400/50 hover:text-fuchsia-50"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-llx-link hover:text-foreground"
           title={proof.proofTxHash}
         >
           Arc proof tx
@@ -47,7 +47,7 @@ export function ProofExplorerLinks({
           href={arcAddressUrl(config.arcExplorer, config.settlementProofsAddress)}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-silver-200 hover:border-white/30 hover:text-silver-50"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-llx-link hover:text-foreground"
         >
           Arc registry
           <ExternalLink className="size-3" />
@@ -57,7 +57,7 @@ export function ProofExplorerLinks({
           href={config.arcExplorer}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-silver-200 hover:border-white/30 hover:text-silver-50"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-llx-link hover:text-foreground"
         >
           Arc explorer
           <ExternalLink className="size-3" />

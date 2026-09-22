@@ -1,4 +1,4 @@
-import { type Address, isAddress } from "viem";
+import { type Address, getAddress, isAddress } from "viem";
 
 export type PublicConfig = {
   arcRpcUrl: string;
@@ -16,9 +16,17 @@ function stripSlash(url: string) {
 
 export function getPublicConfig(): PublicConfig {
   const address = process.env.NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS?.trim() ?? "";
+  let settlementProofsAddress: Address | null = null;
+  if (address && isAddress(address, { strict: false })) {
+    try {
+      settlementProofsAddress = getAddress(address);
+    } catch {
+      settlementProofsAddress = null;
+    }
+  }
   return {
     arcRpcUrl: process.env.NEXT_PUBLIC_ARC_RPC_URL?.trim() || "https://rpc.mainnet.arc.io",
-    settlementProofsAddress: isAddress(address) ? address : null,
+    settlementProofsAddress,
     arcExplorer: stripSlash(
       process.env.NEXT_PUBLIC_ARC_EXPLORER?.trim() || "https://explorer.arc.io",
     ),

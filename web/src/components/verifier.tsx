@@ -85,13 +85,13 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
 
   if (!config.settlementProofsAddress) {
     return (
-      <Card className="border-purple-500/30 bg-card/80">
+      <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle>Verifier not configured</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Set <code className="text-silver-100">NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS</code> to
+            Set <code className="text-foreground">NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS</code> to
             the Arc registry address, then rebuild or restart the web app.
           </p>
           <p>Read-only. No API key. No wallet required.</p>
@@ -102,16 +102,16 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
 
   return (
     <div className="space-y-6">
-      <Card className="border-violet-500/25 bg-[linear-gradient(180deg,rgba(139,92,246,0.10),rgba(12,10,18,0.92))]">
+      <Card className="border-border bg-card">
         <CardHeader className="pb-3">
-          <p className="text-xs tracking-[0.2em] text-violet-300 uppercase">Public verifier</p>
-          <CardTitle className="text-xl text-silver-50 sm:text-2xl">
+          <p className="text-xs tracking-[0.2em] text-llx-label uppercase">Public verifier</p>
+          <CardTitle className="text-xl text-foreground sm:text-2xl">
             Look up a settlement proof
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Paste a settlement ID (<code className="text-violet-200">refId</code>), an Arc proof
+            Paste a settlement ID (<code className="text-llx-link">refId</code>), an Arc proof
             transaction hash, or a Base payment{" "}
-            <code className="text-violet-200">srcTxHash</code>. Data comes from Arc JSON-RPC only
+            <code className="text-llx-link">srcTxHash</code>. Data comes from Arc JSON-RPC only
             — not a privacy product.
           </p>
         </CardHeader>
@@ -123,7 +123,7 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="0x… refId or tx hash"
-                className="border-white/10 bg-black/30 pl-8 font-mono text-sm text-silver-50"
+                className="border-border bg-background pl-8 font-mono text-sm text-llx-mono"
                 aria-label="Settlement ID or transaction hash"
                 spellCheck={false}
                 autoComplete="off"
@@ -140,7 +140,7 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
               href={arcAddressUrl(config.arcExplorer, config.settlementProofsAddress)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-violet-300 hover:text-violet-100"
+              className="break-all font-mono text-llx-link hover:text-foreground"
             >
               {config.settlementProofsAddress}
             </a>
@@ -161,13 +161,13 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
       ) : null}
 
       {result?.status === "not_found" ? (
-        <Card className="border-dashed border-white/20 bg-card/60">
+        <Card className="border-dashed border-border bg-card">
           <CardHeader>
-            <CardTitle className="text-lg text-silver-50">Not found</CardTitle>
+            <CardTitle className="text-lg text-foreground">Not found</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>{result.message}</p>
-            <p className="font-mono text-xs break-all text-silver-300">{result.query}</p>
+            <p className="break-all font-mono text-xs text-llx-mono">{result.query}</p>
           </CardContent>
         </Card>
       ) : null}
@@ -193,22 +193,22 @@ function FoundProof({
   selfTest: boolean;
 }) {
   return (
-    <Card className="border-violet-500/30 bg-card/90">
+    <Card className="border-border bg-card">
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className="border-emerald-500/40 bg-emerald-500/15 text-emerald-100">
+          <Badge className="border-llx-found-border bg-transparent text-llx-found-text">
             Found
           </Badge>
           {selfTest ? (
-            <Badge className="border-amber-400/50 bg-amber-400/15 text-amber-100">
+            <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
               Self-test
             </Badge>
           ) : null}
           <span className="text-xs text-muted-foreground">{KIND_LABEL[queryKind]}</span>
         </div>
         <div>
-          <p className="text-xs tracking-[0.2em] text-violet-300 uppercase">Amount (USDC)</p>
-          <CardTitle className="font-mono text-3xl text-silver-50">
+          <p className="text-xs tracking-[0.2em] text-llx-label uppercase">Amount (USDC)</p>
+          <CardTitle className="font-mono text-3xl text-foreground">
             {formatUsdc(proof.amountUSDC)}{" "}
             <span className="text-lg text-muted-foreground">USDC</span>
           </CardTitle>
@@ -219,7 +219,7 @@ function FoundProof({
           <Field label="Settlement ID (refId)" mono full>
             <Link
               href={`/proofs/${proof.refId}`}
-              className="text-violet-200 hover:text-violet-100"
+              className="break-all text-llx-link hover:text-foreground"
             >
               {proof.refId}
             </Link>
@@ -229,7 +229,7 @@ function FoundProof({
               href={baseAddressUrl(config.baseExplorer, proof.payee)}
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-violet-200 hover:text-violet-100"
+              className="break-all font-mono text-llx-link hover:text-foreground"
             >
               {proof.payee}
             </a>
@@ -242,7 +242,7 @@ function FoundProof({
               {selfTest ? (
                 <Badge
                   variant="outline"
-                  className="border-amber-400/40 text-amber-100"
+                  className="border-llx-selftest-border text-llx-selftest-text"
                 >
                   llx-self-test-0.001
                 </Badge>
@@ -254,7 +254,7 @@ function FoundProof({
               href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
               target="_blank"
               rel="noreferrer"
-              className="text-violet-200 hover:text-violet-100"
+              className="break-all text-llx-link hover:text-foreground"
             >
               {proof.srcTxHash}
             </a>
@@ -265,7 +265,7 @@ function FoundProof({
                 href={arcTxUrl(config.arcExplorer, proof.proofTxHash)}
                 target="_blank"
                 rel="noreferrer"
-                className="text-fuchsia-200 hover:text-fuchsia-100"
+                className="break-all text-llx-link hover:text-foreground"
               >
                 {proof.proofTxHash}
               </a>
@@ -282,7 +282,8 @@ function FoundProof({
                       )}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-violet-300 hover:text-violet-100"
+                      className="inline text-llx-link hover:text-foreground"
+                      style={{ overflowWrap: "normal", wordBreak: "normal" }}
                     >
                       open registry on Arc explorer
                     </a>
@@ -311,12 +312,12 @@ function Field({
 }) {
   return (
     <div className={full ? "sm:col-span-2" : undefined}>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dt className="text-xs tracking-[0.15em] text-llx-label uppercase">{label}</dt>
       <dd
         className={
           mono
-            ? "mt-1 break-all font-mono text-xs text-silver-200"
-            : "mt-1 text-silver-100"
+            ? "mt-1 break-words whitespace-normal font-mono text-xs text-llx-mono"
+            : "mt-1 break-words whitespace-normal text-foreground"
         }
       >
         {children}

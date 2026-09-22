@@ -28,8 +28,8 @@ export default async function ProofsPage({ searchParams }: PageProps) {
       subtitle={
         <>
           Public verifier for settlement proofs on Arc. Look up by settlement ID (
-          <code className="text-violet-200">refId</code>), Arc proof tx, or Base{" "}
-          <code className="text-violet-200">srcTxHash</code>. Cleartext payee. Real Arc RPC data
+          <code className="text-llx-link">refId</code>), Arc proof tx, or Base{" "}
+          <code className="text-llx-link">srcTxHash</code>. Cleartext payee. Real Arc RPC data
           only. Not a privacy product.
         </>
       }
@@ -39,7 +39,7 @@ export default async function ProofsPage({ searchParams }: PageProps) {
 
         <section className="space-y-4 border-t border-white/10 pt-10">
           <div>
-            <h2 className="text-xl font-semibold text-silver-50">Recorded proofs ledger</h2>
+            <h2 className="text-xl font-semibold text-foreground">Recorded proofs ledger</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Full append-only list from the same Arc registry. Filter locally or open a row&apos;s
               detail page.

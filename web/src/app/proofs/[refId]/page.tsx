@@ -52,7 +52,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
       }
     >
       <div className="mb-6">
-        <Link href="/proofs" className="text-sm text-violet-300 hover:text-violet-100">
+        <Link href="/proofs" className="text-sm text-llx-link hover:text-foreground">
           ← Verifier &amp; all proofs
         </Link>
       </div>
@@ -64,19 +64,19 @@ export default async function ProofDetailPage({ params }: PageProps) {
       ) : null}
 
       {proof ? (
-        <Card className="border-violet-500/25 bg-card/90">
+        <Card className="border-border bg-card">
           <CardHeader>
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <p className="text-xs tracking-[0.2em] text-violet-300 uppercase">
+              <p className="text-xs tracking-[0.2em] text-llx-label uppercase">
                 Settlement proof on Arc
               </p>
               {selfTest ? (
-                <Badge className="border-amber-400/50 bg-amber-400/15 text-amber-100">
+                <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
                   Self-test
                 </Badge>
               ) : null}
             </div>
-            <CardTitle className="font-mono text-3xl text-silver-50">
+            <CardTitle className="font-mono text-3xl text-foreground">
               {formatUsdc(proof.amountUSDC)} USDC
             </CardTitle>
           </CardHeader>
@@ -90,7 +90,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
                   href={baseAddressUrl(config.baseExplorer, proof.payee)}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-mono text-violet-200 hover:text-violet-100"
+                  className="break-all font-mono text-llx-link hover:text-foreground"
                 >
                   {proof.payee}
                 </a>
@@ -105,7 +105,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
                   href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-violet-200 hover:text-violet-100"
+                  className="break-all text-llx-link hover:text-foreground"
                 >
                   {proof.srcTxHash}
                 </a>
@@ -116,7 +116,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
                     href={arcTxUrl(config.arcExplorer, proof.proofTxHash)}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-fuchsia-200 hover:text-fuchsia-100"
+                    className="break-all text-llx-link hover:text-foreground"
                   >
                     {proof.proofTxHash}
                   </a>
@@ -133,7 +133,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
                           )}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-violet-300 hover:text-violet-100"
+                          className="text-llx-link hover:text-foreground"
                         >
                           open registry on Arc explorer
                         </a>
@@ -164,8 +164,14 @@ function Field({
 }) {
   return (
     <div className={full ? "sm:col-span-2" : undefined}>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={mono ? "mt-1 break-all font-mono text-xs text-silver-200" : "mt-1 text-silver-100"}>
+      <dt className="text-xs tracking-[0.15em] text-llx-label uppercase">{label}</dt>
+      <dd
+        className={
+          mono
+            ? "mt-1 break-words whitespace-normal font-mono text-xs text-llx-mono"
+            : "mt-1 break-words whitespace-normal text-foreground"
+        }
+      >
         {children}
       </dd>
     </div>
