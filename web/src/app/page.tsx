@@ -19,10 +19,10 @@ export default async function Home() {
       title="Settlement proofs on Arc"
       subtitle={
         <>
-          Public, append-only <span className="text-silver-100">settlement proofs on Arc</span>.
-          USDC payments stay on <span className="text-silver-100">Base</span>; each proof stores a
+          Public, append-only <span className="text-foreground">settlement proofs on Arc</span>.
+          USDC payments stay on <span className="text-foreground">Base</span>; each proof stores a
           cleartext payee and the public Base payment{" "}
-          <code className="text-violet-200">srcTxHash</code>, with Arc explorer + BaseScan links
+          <code className="text-llx-link">srcTxHash</code>, with Arc explorer + BaseScan links
           on every row. Not privacy. No wallet required to read.
         </>
       }

@@ -82,13 +82,13 @@ export function Ledger({
 
   if (!config.settlementProofsAddress && !data) {
     return (
-      <Card className="border-purple-500/30 bg-card/80">
+      <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle>Ledger not configured</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Set <code className="text-silver-100">NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS</code> to
+            Set <code className="text-foreground">NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS</code> to
             the redeployed Arc contract, then rebuild or restart the web app.
           </p>
           <p>No wallet is required to read this registry.</p>
@@ -119,7 +119,7 @@ export function Ledger({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter by payee, memo, or hash"
-            className="border-white/10 bg-black/30 pl-8 text-silver-50"
+            className="border-border bg-background pl-8 text-foreground"
             aria-label="Filter proofs"
           />
         </div>
@@ -129,7 +129,7 @@ export function Ledger({
               href={arcAddressUrl(config.arcExplorer, config.settlementProofsAddress)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-violet-300 hover:text-violet-200"
+              className="inline-flex items-center gap-1 text-sm text-llx-link hover:text-foreground"
             >
               Contract on Arc
               <ExternalLink className="size-3.5" />
@@ -161,15 +161,15 @@ export function Ledger({
 
       {filtered.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-white/10 md:block">
+          <div className="hidden overflow-hidden rounded-xl border border-border md:block">
             <Table>
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
-                  <TableHead className="text-silver-300">Date (UTC)</TableHead>
-                  <TableHead className="text-silver-300">Payee</TableHead>
-                  <TableHead className="text-right text-silver-300">Amount</TableHead>
-                  <TableHead className="text-silver-300">Memo</TableHead>
-                  <TableHead className="text-right text-silver-300">Links</TableHead>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground">Date (UTC)</TableHead>
+                  <TableHead className="text-muted-foreground">Payee</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Amount</TableHead>
+                  <TableHead className="text-muted-foreground">Memo</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Links</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,10 +197,10 @@ export function Ledger({
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <Card className="border-violet-500/25 bg-[linear-gradient(180deg,rgba(139,92,246,0.12),rgba(12,10,18,0.9))]">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-2">
-        <p className="text-xs tracking-[0.2em] text-violet-300 uppercase">{label}</p>
-        <CardTitle className="font-mono text-3xl font-medium text-silver-50 sm:text-4xl">
+        <p className="text-xs tracking-[0.2em] text-llx-label uppercase">{label}</p>
+        <CardTitle className="font-mono text-3xl font-medium text-foreground sm:text-4xl">
           {value}
         </CardTitle>
       </CardHeader>
@@ -211,8 +211,8 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint: 
 
 function ProofRow({ proof }: { proof: LedgerProof }) {
   return (
-    <TableRow className="border-white/10">
-      <TableCell className="whitespace-nowrap text-silver-200">
+    <TableRow className="border-border">
+      <TableCell className="whitespace-nowrap text-llx-mono">
         {formatPaidAt(proof.paidAt)}
       </TableCell>
       <TableCell>
@@ -220,21 +220,21 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
           href={baseAddressUrl(config.baseExplorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
-          className="font-mono text-sm text-violet-200 hover:text-violet-100"
+          className="font-mono text-sm text-llx-link hover:text-foreground"
           title={proof.payee}
         >
           {shortenAddress(proof.payee)}
         </a>
       </TableCell>
-      <TableCell className="text-right font-mono text-silver-50">
+      <TableCell className="text-right font-mono text-foreground">
         {formatUsdc(proof.amountUSDC)}{" "}
         <span className="text-muted-foreground">USDC</span>
       </TableCell>
-      <TableCell className="max-w-xs text-silver-200" title={proof.memo}>
+      <TableCell className="max-w-xs text-llx-mono" title={proof.memo}>
         <span className="inline-flex max-w-full items-center gap-2">
           <span className="truncate">{proof.memo || "—"}</span>
           {isSelfTestMemo(proof.memo) ? (
-            <Badge className="shrink-0 border-amber-400/50 bg-amber-400/15 text-amber-100">
+            <Badge className="shrink-0 border-llx-selftest-border bg-transparent text-llx-selftest-text">
               Self-test
             </Badge>
           ) : null}
@@ -249,27 +249,27 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
 
 function ProofCard({ proof }: { proof: LedgerProof }) {
   return (
-    <Card className="border-white/10 bg-card/80">
+    <Card className="border-border bg-card/80">
       <CardContent className="space-y-3 pt-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground">{formatPaidAt(proof.paidAt)}</p>
-            <p className="font-mono text-lg text-silver-50">{formatUsdc(proof.amountUSDC)} USDC</p>
+            <p className="font-mono text-lg text-foreground">{formatUsdc(proof.amountUSDC)} USDC</p>
           </div>
         </div>
         <a
           href={baseAddressUrl(config.baseExplorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
-          className="font-mono text-sm text-violet-200 hover:text-violet-100"
+          className="font-mono text-sm text-llx-link hover:text-foreground"
           title={proof.payee}
         >
           {shortenAddress(proof.payee)}
         </a>
-        <p className="flex flex-wrap items-center gap-2 text-sm text-silver-200">
+        <p className="flex flex-wrap items-center gap-2 text-sm text-llx-mono">
           <span>{proof.memo || "No memo"}</span>
           {isSelfTestMemo(proof.memo) ? (
-            <Badge className="border-amber-400/50 bg-amber-400/15 text-amber-100">
+            <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
               Self-test
             </Badge>
           ) : null}
