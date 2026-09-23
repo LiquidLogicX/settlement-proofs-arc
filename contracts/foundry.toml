@@ -16,6 +16,8 @@ runs = 256
 arc_mainnet = "https://rpc.mainnet.arc.io"
 arc_testnet = "${ARC_TESTNET_RPC_URL}"
 base_mainnet = "${BASE_RPC_URL}"
+moderato = "https://rpc.moderato.tempo.xyz"
+tempo_testnet = "https://rpc.moderato.tempo.xyz"
 
 # explorer.arc.io/api is behind Cloudflare and must not be used for programmatic
 # verify. Runtime / CI verification uses https://rpc.mainnet.arc.io (eth_call).

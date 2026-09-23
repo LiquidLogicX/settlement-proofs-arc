@@ -30,6 +30,13 @@ import {SettlementProofs} from "../src/SettlementProofs.sol";
 ///     --broadcast --slow \
 ///     --private-key $PRIVATE_KEY
 ///
+/// Tempo Moderato testnet (chainId 42431) — NO Tempo mainnet:
+///   forge script script/Deploy.s.sol:DeploySettlementProofs --sig "run()" \
+///     --rpc-url https://rpc.moderato.tempo.xyz \
+///     --broadcast --slow \
+///     --private-key $PRIVATE_KEY \
+///     --tempo.fee-token pathUSD
+///
 /// RECORDER_ADDRESS may also be passed as the first argument:
 ///   forge script script/Deploy.s.sol:DeploySettlementProofs --sig "run(address)" $RECORDER_ADDRESS ...
 contract DeploySettlementProofs is Script {

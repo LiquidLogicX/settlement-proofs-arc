@@ -29,6 +29,15 @@ Base USDC transfer  →  recorder service  →  SettlementProofs on Arc  →  pu
 
 `srcTxHash` is the **Base** payment transaction hash (where USDC moved).
 
+### Tempo Moderato testnet (additional registry)
+
+| Network | chainId | RPC | Explorer | Gas |
+| --- | --- | --- | --- | --- |
+| Tempo testnet (Moderato) | `42431` | `https://rpc.moderato.tempo.xyz` | `https://explore.testnet.tempo.xyz` | pathUSD TIP-20 (no native gas token) |
+
+Same `SettlementProofs` ABI as Arc. Public verifier network switcher shows **Arc**, **Base**, and **Tempo**. See [`docs/tempo-testnet.md`](docs/tempo-testnet.md). **No Tempo mainnet** from this workflow.
+
+
 ### Decimals (typed — critical)
 
 | Representation | Address / path | Decimals | Type in recorder |

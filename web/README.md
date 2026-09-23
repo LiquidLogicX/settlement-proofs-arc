@@ -18,3 +18,7 @@ Import the `web` directory as the root of a Next.js project (or set Root Directo
 Rebuild after changing public env vars — they are inlined at build time.
 
 **Note:** Point at a registry deployed for cleartext payee + public `srcTxHash`. Older confidential-payee deployments are obsolete.
+
+## Networks
+
+The public site network switcher exposes **Arc** (registry), **Base** (payment), and **Tempo** Moderato testnet (registry). Set `NEXT_PUBLIC_TEMPO_*` vars (see `.env.example`). Lookup/ledger APIs accept `?network=arc|base|tempo`.

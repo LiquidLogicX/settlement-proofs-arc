@@ -2,88 +2,132 @@
 
 import Link from "next/link";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { ExternalLink, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import {
-  arcAddressUrl,
-  arcTxUrl,
-  baseAddressUrl,
-  baseTxUrl,
+  explorerAddressUrl,
+  explorerTxUrl,
   formatPaidAt,
   formatUsdc,
-  getPublicConfig,
+  getNetwork,
+  type NetworkId,
 } from "@/lib/config";
 import {
   deserializeLookup,
+  isTempoSyntheticSelfTest,
+  selfTestBadgeLabel,
   type ProofLookupResult,
   type ProofQueryKind,
   type SerializedLookupResult,
 } from "@/lib/proofs";
 
-const config = getPublicConfig();
-
 const KIND_LABEL: Record<ProofQueryKind, string> = {
   refId: "Matched as settlement ID (refId)",
-  arcTx: "Matched as Arc proof transaction",
+  arcTx: "Matched as registry proof transaction",
   srcTxHash: "Matched as Base payment (srcTxHash)",
 };
 
 type LookupApiBody =
-  | SerializedLookupResult
-  | { status?: undefined; error?: string };
+  | (SerializedLookupResult & { network?: string })
+  | { status?: undefined; error?: string; network?: string };
 
-export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
+export function Verifier({
+  initialQuery = "",
+  networkId,
+}: {
+  initialQuery?: string;
+  networkId: NetworkId;
+}) {
+  const network = getNetwork(networkId);
+  const base = getNetwork("base");
   const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProofLookupResult | null>(null);
   const autoRan = useRef(false);
 
-  const runLookup = useCallback(async (raw: string) => {
-    const trimmed = raw.trim();
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      if (!trimmed) {
-        setError("Enter a settlement ID (refId) or a transaction hash.");
-        return;
-      }
-      const response = await fetch(
-        `/api/proofs/lookup?q=${encodeURIComponent(trimmed)}`,
-        { cache: "no-store" },
-      );
-      const body = (await response.json()) as LookupApiBody;
-      if (!("status" in body) || !body.status) {
-        throw new Error(
-          ("error" in body && body.error) || `Lookup failed (${response.status})`,
+  const runLookup = useCallback(
+    async (raw: string) => {
+      const trimmed = raw.trim();
+      setLoading(true);
+      setError(null);
+      setResult(null);
+      try {
+        if (!trimmed) {
+          setError("Enter a settlement ID (refId) or a transaction hash.");
+          return;
+        }
+        const response = await fetch(
+          `/api/proofs/lookup?network=${networkId}&q=${encodeURIComponent(trimmed)}`,
+          { cache: "no-store" },
         );
+        const body = (await response.json()) as LookupApiBody;
+        if (!("status" in body) || !body.status) {
+          throw new Error(
+            ("error" in body && body.error) || `Lookup failed (${response.status})`,
+          );
+        }
+        setResult(deserializeLookup(body));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
       }
-      setResult(deserializeLookup(body));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [networkId],
+  );
+
+  useEffect(() => {
+    autoRan.current = false;
+    setResult(null);
+    setError(null);
+  }, [networkId]);
 
   useEffect(() => {
     if (autoRan.current) return;
     if (!initialQuery.trim()) return;
+    if (network.role !== "registry") return;
     autoRan.current = true;
     void runLookup(initialQuery);
-  }, [initialQuery, runLookup]);
+  }, [initialQuery, runLookup, network.role]);
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     void runLookup(query);
   }
 
-  if (!config.settlementProofsAddress) {
+  if (network.role === "payment") {
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle>Base payment network</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>{network.blurb}</p>
+          <p>
+            The verifier reads SettlementProofs on <strong className="text-foreground">Arc</strong>{" "}
+            or <strong className="text-foreground">Tempo</strong>. Paste a Base{" "}
+            <code className="text-llx-link">srcTxHash</code> there to match a recorded proof.
+          </p>
+          <a
+            href={base.explorer}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-llx-link hover:text-foreground"
+          >
+            Open BaseScan
+            <ExternalLink className="size-3.5" />
+          </a>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!network.settlementProofsAddress) {
     return (
       <Card className="border-border bg-card">
         <CardHeader>
@@ -91,8 +135,8 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Set <code className="text-foreground">NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS</code> to
-            the Arc registry address, then rebuild or restart the web app.
+            Set the SettlementProofs address for {network.label}, then rebuild or restart the web
+            app.
           </p>
           <p>Read-only. No API key. No wallet required.</p>
         </CardContent>
@@ -106,13 +150,13 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
         <CardHeader className="pb-3">
           <p className="text-xs tracking-[0.2em] text-llx-label uppercase">Public verifier</p>
           <CardTitle className="text-xl text-foreground sm:text-2xl">
-            Look up a settlement proof
+            Look up a settlement proof on {network.label}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Paste a settlement ID (<code className="text-llx-link">refId</code>), an Arc proof
-            transaction hash, or a Base payment{" "}
-            <code className="text-llx-link">srcTxHash</code>. Data comes from Arc JSON-RPC only
-            — not a privacy product.
+            Paste a settlement ID (<code className="text-llx-link">refId</code>), a{" "}
+            {network.shortLabel} proof transaction hash, or a Base payment{" "}
+            <code className="text-llx-link">srcTxHash</code>. Data comes from {network.label}{" "}
+            JSON-RPC only — not a privacy product.
           </p>
         </CardHeader>
         <CardContent>
@@ -137,12 +181,12 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
           <p className="mt-3 text-xs text-muted-foreground">
             Registry:{" "}
             <a
-              href={arcAddressUrl(config.arcExplorer, config.settlementProofsAddress)}
+              href={explorerAddressUrl(network.explorer, network.settlementProofsAddress)}
               target="_blank"
               rel="noreferrer"
               className="break-all font-mono text-llx-link hover:text-foreground"
             >
-              {config.settlementProofsAddress}
+              {network.settlementProofsAddress}
             </a>
           </p>
         </CardContent>
@@ -150,7 +194,9 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
 
       {error ? (
         <Card className="border-destructive/40 bg-destructive/10">
-          <CardContent className="pt-6 text-sm">Could not query Arc RPC: {error}</CardContent>
+          <CardContent className="pt-6 text-sm">
+            Could not query {network.label} RPC: {error}
+          </CardContent>
         </Card>
       ) : null}
 
@@ -177,6 +223,7 @@ export function Verifier({ initialQuery = "" }: { initialQuery?: string }) {
           proof={result.proof}
           queryKind={result.queryKind}
           selfTest={result.selfTest}
+          networkId={networkId}
         />
       ) : null}
     </div>
@@ -187,11 +234,16 @@ function FoundProof({
   proof,
   queryKind,
   selfTest,
+  networkId,
 }: {
   proof: import("@/lib/proofs").LedgerProof;
   queryKind: ProofQueryKind;
   selfTest: boolean;
+  networkId: NetworkId;
 }) {
+  const network = getNetwork(networkId);
+  const base = getNetwork("base");
+
   return (
     <Card className="border-border bg-card">
       <CardHeader className="space-y-3">
@@ -201,11 +253,17 @@ function FoundProof({
           </Badge>
           {selfTest ? (
             <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
-              Self-test
+              {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
           <span className="text-xs text-muted-foreground">{KIND_LABEL[queryKind]}</span>
         </div>
+        {isTempoSyntheticSelfTest({ networkId, selfTest }) ? (
+          <p className="rounded-md border border-llx-selftest-border/50 bg-llx-selftest-border/10 px-3 py-2 text-sm text-llx-selftest-text">
+            Synthetic Moderato demo — not a real Base payment. The srcTxHash was made up for
+            testnet; production recorder still verifies a live Base USDC Transfer before writing.
+          </p>
+        ) : null}
         <div>
           <p className="text-xs tracking-[0.2em] text-llx-label uppercase">Amount (USDC)</p>
           <CardTitle className="font-mono text-3xl text-foreground">
@@ -218,7 +276,7 @@ function FoundProof({
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <Field label="Settlement ID (refId)" mono full>
             <Link
-              href={`/proofs/${proof.refId}`}
+              href={`/proofs/${proof.refId}?network=${networkId}`}
               className="break-all text-llx-link hover:text-foreground"
             >
               {proof.refId}
@@ -226,7 +284,7 @@ function FoundProof({
           </Field>
           <Field label="Payee (Base)">
             <a
-              href={baseAddressUrl(config.baseExplorer, proof.payee)}
+              href={explorerAddressUrl(base.explorer, proof.payee)}
               target="_blank"
               rel="noreferrer"
               className="break-all font-mono text-llx-link hover:text-foreground"
@@ -244,14 +302,14 @@ function FoundProof({
                   variant="outline"
                   className="border-llx-selftest-border text-llx-selftest-text"
                 >
-                  llx-self-test-0.001
+                  {networkId === "tempo" ? "synthetic · llx-self-test-0.001" : "llx-self-test-0.001"}
                 </Badge>
               ) : null}
             </span>
           </Field>
           <Field label="Base payment tx (srcTxHash)" mono full>
             <a
-              href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
+              href={explorerTxUrl(base.explorer, proof.srcTxHash)}
               target="_blank"
               rel="noreferrer"
               className="break-all text-llx-link hover:text-foreground"
@@ -259,10 +317,10 @@ function FoundProof({
               {proof.srcTxHash}
             </a>
           </Field>
-          <Field label="Arc proof tx" mono full>
+          <Field label={`${network.shortLabel} proof tx`} mono full>
             {proof.proofTxHash ? (
               <a
-                href={arcTxUrl(config.arcExplorer, proof.proofTxHash)}
+                href={explorerTxUrl(network.explorer, proof.proofTxHash)}
                 target="_blank"
                 rel="noreferrer"
                 className="break-all text-llx-link hover:text-foreground"
@@ -272,20 +330,20 @@ function FoundProof({
             ) : (
               <span className="text-muted-foreground">
                 Not indexed from PaymentRecorded logs yet
-                {config.settlementProofsAddress ? (
+                {network.settlementProofsAddress ? (
                   <>
                     {" · "}
                     <a
-                      href={arcAddressUrl(
-                        config.arcExplorer,
-                        config.settlementProofsAddress,
+                      href={explorerAddressUrl(
+                        network.explorer,
+                        network.settlementProofsAddress,
                       )}
                       target="_blank"
                       rel="noreferrer"
                       className="inline text-llx-link hover:text-foreground"
                       style={{ overflowWrap: "normal", wordBreak: "normal" }}
                     >
-                      open registry on Arc explorer
+                      open registry on {network.shortLabel} explorer
                     </a>
                   </>
                 ) : null}
@@ -293,7 +351,7 @@ function FoundProof({
             )}
           </Field>
         </dl>
-        <ProofExplorerLinks proof={proof} align="start" />
+        <ProofExplorerLinks proof={proof} align="start" networkId={networkId} />
       </CardContent>
     </Card>
   );
