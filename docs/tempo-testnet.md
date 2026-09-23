@@ -24,8 +24,16 @@ EVM-compatible: Foundry `forge script` / `cast send` with `--tempo.fee-token pat
 | --- | --- |
 | SettlementProofs | `0x35d7ec9B87A173774F18182c087bE3296efCce51` |
 | Deploy tx | `0x43724d26545b93bba63ea0f994e706a536c6111964acc0823220d5d41408c13f` |
-| RECORDER_ROLE | `0x7BdF3A…87ed` (same hot wallet as Arc recorder; gas/pathUSD only) |
-| Owner | ephemeral Tempo deployer (DEFAULT_ADMIN_ROLE only) |
+| RECORDER_ROLE (Tempo) | `0x7BdF3A4351d66215755f21222AAB0AFa0e8E87ed` — separate crew hot wallet for this Moderato deploy (pathUSD gas only). **Not** the Arc OKX recorder. |
+| Owner / DEFAULT_ADMIN_ROLE (Tempo) | `0xe4b6b5fb5f228ccd431affaa05f3f21760ebad07` — throwaway crew key for testnet only. **Not** Miles’s OKX Arc admin. |
+
+### Wallet separation (do not conflate)
+
+| Role | Network | Address | Notes |
+| --- | --- | --- | --- |
+| Arc recorder (OKX “LLX Arc recorder”) | Arc mainnet | `0xfB1B8960B90944882813F09A0f537075C76253C7` | Live Render `arc-settlement-recorder` hot wallet; Arc gas only |
+| Tempo recorder | Tempo Moderato | `0x7BdF3A4351d66215755f21222AAB0AFa0e8E87ed` | Distinct key granted `RECORDER_ROLE` on this testnet deploy |
+| Tempo admin | Tempo Moderato | `0xe4b6b5fb5f228ccd431affaa05f3f21760ebad07` | Ephemeral crew deployer; fine for testnet. Any future Tempo **mainnet** admin must be Miles’s own wallet (as on Arc). **No Tempo mainnet from this workflow.** |
 
 ## Self-test proof (one live record)
 
@@ -38,7 +46,7 @@ EVM-compatible: Foundry `forge script` / `cast send` with `--tempo.fee-token pat
 | Explorer | https://explore.testnet.tempo.xyz/tx/0x800e271d417813aa726f8dcc66e709e7819f1b987480585326235bd3f38e59f7 |
 | Verifier (after web deploy) | https://proofs.liquidlogicx.com/proofs?network=tempo&q=0xc1de754b33b29c17b260d90a39a357d2ce656ffeea8ef786d218f685401ed624 |
 
-Note: the self-test `srcTxHash` is a synthetic bytes32 for Moderato demo (not a live Base transfer). Production recorder still verifies a real Base USDC `Transfer` before writing.
+Note: the self-test `srcTxHash` is a **synthetic** bytes32 for Moderato demo (not a live Base transfer). The public verifier labels this Tempo proof as a synthetic demo — not a real payment. Production recorder still verifies a real Base USDC `Transfer` before writing.
 
 ## Foundry deploy recipe
 

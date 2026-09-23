@@ -142,6 +142,32 @@ export function isSelfTestMemo(memo: string): boolean {
   return memo.trim() === SELF_TEST_MEMO;
 }
 
+/** Known Tempo Moderato synthetic self-test refId (demo; not a real Base payment). */
+export const TEMPO_SYNTHETIC_SELF_TEST_REF_ID =
+  "0xc1de754b33b29c17b260d90a39a357d2ce656ffeea8ef786d218f685401ed624" as Hex;
+
+/**
+ * Tempo Moderato self-tests use a made-up srcTxHash. Label them synthetic/demo in UI.
+ * Arc self-tests keep the existing "Self-test" badge (Arc proof #1 was a real Base payment).
+ */
+export function isTempoSyntheticSelfTest(args: {
+  networkId: NetworkId;
+  selfTest?: boolean;
+  memo?: string;
+  refId?: string;
+}): boolean {
+  if (args.networkId !== "tempo") return false;
+  if (args.selfTest) return true;
+  if (args.memo !== undefined && isSelfTestMemo(args.memo)) return true;
+  if (args.refId && args.refId.toLowerCase() === TEMPO_SYNTHETIC_SELF_TEST_REF_ID) return true;
+  return false;
+}
+
+/** Badge copy for self-test / synthetic proofs. Arc stays "Self-test"; Tempo is explicit. */
+export function selfTestBadgeLabel(networkId: NetworkId): string {
+  return networkId === "tempo" ? "Synthetic demo" : "Self-test";
+}
+
 /** Accept 0x-prefixed or bare 32-byte hex (refId or tx hash). */
 export function normalizeBytes32Query(raw: string): Hex | null {
   const trimmed = raw.trim();

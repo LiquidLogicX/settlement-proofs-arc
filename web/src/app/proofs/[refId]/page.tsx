@@ -12,7 +12,7 @@ import {
   getNetwork,
   parseNetworkId,
 } from "@/lib/config";
-import { fetchProofByRefId, isSelfTestMemo } from "@/lib/proofs";
+import { fetchProofByRefId, isSelfTestMemo, isTempoSyntheticSelfTest, selfTestBadgeLabel } from "@/lib/proofs";
 
 export const dynamic = "force-dynamic";
 
@@ -84,10 +84,15 @@ export default async function ProofDetailPage({ params, searchParams }: PageProp
               </p>
               {selfTest ? (
                 <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
-                  Self-test
+                  {selfTestBadgeLabel(networkId)}
                 </Badge>
               ) : null}
             </div>
+            {isTempoSyntheticSelfTest({ networkId, selfTest }) ? (
+              <p className="mb-3 text-sm text-llx-selftest-text">
+                Synthetic Moderato demo — not a real Base payment proof.
+              </p>
+            ) : null}
             <CardTitle className="font-mono text-3xl text-foreground">
               {formatUsdc(proof.amountUSDC)} USDC
             </CardTitle>

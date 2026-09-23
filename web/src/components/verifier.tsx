@@ -18,6 +18,8 @@ import {
 } from "@/lib/config";
 import {
   deserializeLookup,
+  isTempoSyntheticSelfTest,
+  selfTestBadgeLabel,
   type ProofLookupResult,
   type ProofQueryKind,
   type SerializedLookupResult,
@@ -251,11 +253,17 @@ function FoundProof({
           </Badge>
           {selfTest ? (
             <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
-              Self-test
+              {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
           <span className="text-xs text-muted-foreground">{KIND_LABEL[queryKind]}</span>
         </div>
+        {isTempoSyntheticSelfTest({ networkId, selfTest }) ? (
+          <p className="rounded-md border border-llx-selftest-border/50 bg-llx-selftest-border/10 px-3 py-2 text-sm text-llx-selftest-text">
+            Synthetic Moderato demo — not a real Base payment. The srcTxHash was made up for
+            testnet; production recorder still verifies a live Base USDC Transfer before writing.
+          </p>
+        ) : null}
         <div>
           <p className="text-xs tracking-[0.2em] text-llx-label uppercase">Amount (USDC)</p>
           <CardTitle className="font-mono text-3xl text-foreground">
@@ -294,7 +302,7 @@ function FoundProof({
                   variant="outline"
                   className="border-llx-selftest-border text-llx-selftest-text"
                 >
-                  llx-self-test-0.001
+                  {networkId === "tempo" ? "synthetic · llx-self-test-0.001" : "llx-self-test-0.001"}
                 </Badge>
               ) : null}
             </span>

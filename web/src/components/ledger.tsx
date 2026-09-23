@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   deserializeLedger,
   isSelfTestMemo,
+  selfTestBadgeLabel,
   type LedgerProof,
   type LedgerSnapshot,
   type SerializedLedger,
@@ -271,7 +272,7 @@ function ProofRow({ proof, networkId }: { proof: LedgerProof; networkId: Network
           <span className="truncate">{proof.memo || "—"}</span>
           {isSelfTestMemo(proof.memo) ? (
             <Badge className="shrink-0 border-llx-selftest-border bg-transparent text-llx-selftest-text">
-              Self-test
+              {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
         </span>
@@ -307,7 +308,7 @@ function ProofCard({ proof, networkId }: { proof: LedgerProof; networkId: Networ
           <span>{proof.memo || "No memo"}</span>
           {isSelfTestMemo(proof.memo) ? (
             <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
-              Self-test
+              {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
         </p>
