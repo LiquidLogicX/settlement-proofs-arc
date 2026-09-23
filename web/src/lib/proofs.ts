@@ -8,9 +8,15 @@ import {
   parseEventLogs,
 } from "viem";
 import { settlementProofsAbi } from "./abi";
-import { getPublicConfig } from "./config";
+import {
+  getNetwork,
+  getPublicConfig,
+  parseNetworkId,
+  type NetworkDefinition,
+  type NetworkId,
+} from "./config";
 
-/** Memo used by the Arc self-test payment (0.001 USDC). */
+/** Memo used by the registry self-test payment (0.001 USDC). */
 export const SELF_TEST_MEMO = "llx-self-test-0.001";
 
 /** Max proofs scanned when matching an input as Base srcTxHash (newest-first). */
@@ -145,33 +151,48 @@ export function normalizeBytes32Query(raw: string): Hex | null {
   return with0x.toLowerCase() as Hex;
 }
 
-/** Arc native gas USDC = 18 decimals. Proof amountUSDC stays 6-dec ERC-20 units (Base USDC). */
-function arcChain(chainId: number, rpcUrl: string) {
+function registryChain(network: NetworkDefinition) {
+  const rpcUrl = network.rpcUrl;
+  if (!rpcUrl) {
+    throw new Error(`${network.label} is not a registry network.`);
+  }
+  const native =
+    network.id === "tempo"
+      ? { name: "USD", symbol: "USD", decimals: 18 }
+      : { name: "USD Coin", symbol: "USDC", decimals: 18 };
   return defineChain({
-    id: chainId,
-    name: chainId === 5042002 ? "Arc Testnet" : "Arc",
-    nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
+    id: network.chainId,
+    name: network.label,
+    nativeCurrency: native,
     rpcUrls: { default: { http: [rpcUrl] } },
   });
 }
 
-type ArcContext = {
+type RegistryContext = {
   client: PublicClient;
   address: Address;
+  network: NetworkDefinition;
 };
 
-function requireArcContext(): ArcContext {
-  const config = getPublicConfig();
-  if (!config.settlementProofsAddress) {
-    throw new Error("NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS is not set to a valid address.");
+function requireRegistryContext(networkId: NetworkId = "arc"): RegistryContext {
+  const network = getNetwork(networkId);
+  if (network.role !== "registry" || !network.rpcUrl) {
+    throw new Error(
+      `${network.label} is the payment rail — pick Arc or Tempo to read settlement proofs.`,
+    );
+  }
+  if (!network.settlementProofsAddress) {
+    throw new Error(
+      `SettlementProofs address is not configured for ${network.label}. Set the matching NEXT_PUBLIC_*_SETTLEMENT_PROOFS_ADDRESS.`,
+    );
   }
 
   const client = createPublicClient({
-    chain: arcChain(config.arcChainId, config.arcRpcUrl),
-    transport: http(config.arcRpcUrl),
+    chain: registryChain(network),
+    transport: http(network.rpcUrl),
   });
 
-  return { client, address: config.settlementProofsAddress };
+  return { client, address: network.settlementProofsAddress, network };
 }
 
 function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
@@ -279,9 +300,9 @@ async function readProofByRef(
   return toLedgerProof(raw, tx);
 }
 
-/** Programmatic ledger: Arc JSON-RPC only (eth_call / getLogs). Never the explorer HTTP API. */
-export async function fetchLedger(): Promise<LedgerSnapshot> {
-  const { client, address } = requireArcContext();
+/** Programmatic ledger: registry JSON-RPC only (eth_call / getLogs). Never explorer HTTP APIs. */
+export async function fetchLedger(networkId: NetworkId = "arc"): Promise<LedgerSnapshot> {
+  const { client, address } = requireRegistryContext(networkId);
 
   const [proofCount, totalSettled] = await Promise.all([
     client.readContract({ address, abi: settlementProofsAbi, functionName: "proofCount" }),
@@ -319,11 +340,14 @@ export async function fetchLedger(): Promise<LedgerSnapshot> {
 }
 
 /**
- * Public verifier lookup (read-only Arc RPC).
- * Order: treat input as refId (exists/getProof) → Arc receipt PaymentRecorded →
+ * Public verifier lookup (read-only registry RPC for Arc or Tempo).
+ * Order: treat input as refId (exists/getProof) → registry receipt PaymentRecorded →
  * bounded newest-first scan for matching srcTxHash.
  */
-export async function lookupProof(rawQuery: string): Promise<ProofLookupResult> {
+export async function lookupProof(
+  rawQuery: string,
+  networkId: NetworkId = "arc",
+): Promise<ProofLookupResult> {
   const query = normalizeBytes32Query(rawQuery);
   if (!query) {
     return {
@@ -333,7 +357,7 @@ export async function lookupProof(rawQuery: string): Promise<ProofLookupResult> 
     };
   }
 
-  const { client, address } = requireArcContext();
+  const { client, address, network } = requireRegistryContext(networkId);
 
   const exists = await client.readContract({
     address,
@@ -353,7 +377,7 @@ export async function lookupProof(rawQuery: string): Promise<ProofLookupResult> 
     };
   }
 
-  // Try as Arc recordPayment tx hash via receipt logs.
+  // Try as registry recordPayment tx hash via receipt logs.
   try {
     const receipt = await client.getTransactionReceipt({ hash: query });
     const events = parseEventLogs({
@@ -425,16 +449,19 @@ export async function lookupProof(rawQuery: string): Promise<ProofLookupResult> 
     status: "not_found",
     query,
     message:
-      "No settlement proof found for that ID or transaction hash on the Arc registry (checked refId, Arc receipt logs, and recent srcTxHash matches).",
+      `No settlement proof found for that ID or transaction hash on the ${network.label} registry (checked refId, receipt logs, and recent srcTxHash matches).`,
   };
 }
 
 /** Fetch a single proof by refId for the detail page. Returns null if missing. */
-export async function fetchProofByRefId(rawRefId: string): Promise<LedgerProof | null> {
+export async function fetchProofByRefId(
+  rawRefId: string,
+  networkId: NetworkId = "arc",
+): Promise<LedgerProof | null> {
   const refId = normalizeBytes32Query(rawRefId);
   if (!refId) return null;
 
-  const { client, address } = requireArcContext();
+  const { client, address } = requireRegistryContext(networkId);
   const exists = await client.readContract({
     address,
     abi: settlementProofsAbi,
@@ -443,4 +470,9 @@ export async function fetchProofByRefId(rawRefId: string): Promise<LedgerProof |
   });
   if (!exists) return null;
   return readProofByRef(client, address, refId);
+}
+
+
+export function resolveNetworkId(raw: string | null | undefined): NetworkId {
+  return parseNetworkId(raw, getPublicConfig().defaultNetwork);
 }

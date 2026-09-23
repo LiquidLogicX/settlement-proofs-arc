@@ -5,13 +5,12 @@ import { SiteChrome } from "@/components/site-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  arcAddressUrl,
-  arcTxUrl,
-  baseAddressUrl,
-  baseTxUrl,
+  explorerAddressUrl,
+  explorerTxUrl,
   formatPaidAt,
   formatUsdc,
-  getPublicConfig,
+  getNetwork,
+  parseNetworkId,
 } from "@/lib/config";
 import { fetchProofByRefId, isSelfTestMemo } from "@/lib/proofs";
 
@@ -19,17 +18,25 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ refId: string }>;
+  searchParams: Promise<{ network?: string }>;
 };
 
-export default async function ProofDetailPage({ params }: PageProps) {
+export default async function ProofDetailPage({ params, searchParams }: PageProps) {
   const { refId: rawRefId } = await params;
-  const config = getPublicConfig();
+  const sp = await searchParams;
+  const networkId = parseNetworkId(sp.network);
+  const network = getNetwork(networkId);
+  const base = getNetwork("base");
+
+  if (network.role !== "registry") {
+    notFound();
+  }
 
   let error: string | null = null;
   let proof: Awaited<ReturnType<typeof fetchProofByRefId>> = null;
 
   try {
-    proof = await fetchProofByRefId(rawRefId);
+    proof = await fetchProofByRefId(rawRefId, networkId);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
@@ -43,16 +50,21 @@ export default async function ProofDetailPage({ params }: PageProps) {
   return (
     <SiteChrome
       active="proofs"
+      network={networkId}
       title="Proof detail"
       subtitle={
         <>
-          Settlement proof on Arc with explorer links for the Arc record and the source Base
-          payment. Public notarization — payee and srcTxHash are cleartext. Not a privacy product.
+          Settlement proof on {network.label} with explorer links for the registry record and the
+          source Base payment. Public notarization — payee and srcTxHash are cleartext. Not a
+          privacy product.
         </>
       }
     >
       <div className="mb-6">
-        <Link href="/proofs" className="text-sm text-llx-link hover:text-foreground">
+        <Link
+          href={`/proofs?network=${networkId}`}
+          className="text-sm text-llx-link hover:text-foreground"
+        >
           ← Verifier &amp; all proofs
         </Link>
       </div>
@@ -68,7 +80,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
           <CardHeader>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <p className="text-xs tracking-[0.2em] text-llx-label uppercase">
-                Settlement proof on Arc
+                Settlement proof on {network.label}
               </p>
               {selfTest ? (
                 <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
@@ -87,7 +99,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
               </Field>
               <Field label="Payee (Base)">
                 <a
-                  href={baseAddressUrl(config.baseExplorer, proof.payee)}
+                  href={explorerAddressUrl(base.explorer, proof.payee)}
                   target="_blank"
                   rel="noreferrer"
                   className="break-all font-mono text-llx-link hover:text-foreground"
@@ -102,7 +114,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
               </Field>
               <Field label="Base payment tx (srcTxHash)" mono full>
                 <a
-                  href={baseTxUrl(config.baseExplorer, proof.srcTxHash)}
+                  href={explorerTxUrl(base.explorer, proof.srcTxHash)}
                   target="_blank"
                   rel="noreferrer"
                   className="break-all text-llx-link hover:text-foreground"
@@ -110,10 +122,10 @@ export default async function ProofDetailPage({ params }: PageProps) {
                   {proof.srcTxHash}
                 </a>
               </Field>
-              <Field label="Arc proof tx" mono full>
+              <Field label={`${network.shortLabel} proof tx`} mono full>
                 {proof.proofTxHash ? (
                   <a
-                    href={arcTxUrl(config.arcExplorer, proof.proofTxHash)}
+                    href={explorerTxUrl(network.explorer, proof.proofTxHash)}
                     target="_blank"
                     rel="noreferrer"
                     className="break-all text-llx-link hover:text-foreground"
@@ -123,19 +135,19 @@ export default async function ProofDetailPage({ params }: PageProps) {
                 ) : (
                   <span className="text-muted-foreground">
                     Not indexed from PaymentRecorded logs yet
-                    {config.settlementProofsAddress ? (
+                    {network.settlementProofsAddress ? (
                       <>
                         {" · "}
                         <a
-                          href={arcAddressUrl(
-                            config.arcExplorer,
-                            config.settlementProofsAddress,
+                          href={explorerAddressUrl(
+                            network.explorer,
+                            network.settlementProofsAddress,
                           )}
                           target="_blank"
                           rel="noreferrer"
                           className="text-llx-link hover:text-foreground"
                         >
-                          open registry on Arc explorer
+                          open registry on {network.shortLabel} explorer
                         </a>
                       </>
                     ) : null}
@@ -143,7 +155,7 @@ export default async function ProofDetailPage({ params }: PageProps) {
                 )}
               </Field>
             </dl>
-            <ProofExplorerLinks proof={proof} align="start" />
+            <ProofExplorerLinks proof={proof} align="start" networkId={networkId} />
           </CardContent>
         </Card>
       ) : null}

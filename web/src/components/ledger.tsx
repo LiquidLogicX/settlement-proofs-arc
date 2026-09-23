@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,12 +14,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  arcAddressUrl,
-  baseAddressUrl,
+  explorerAddressUrl,
   formatPaidAt,
   formatUsdc,
-  getPublicConfig,
+  getNetwork,
   shortenAddress,
+  type NetworkId,
 } from "@/lib/config";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import { Badge } from "@/components/ui/badge";
@@ -31,17 +31,19 @@ import {
   type SerializedLedger,
 } from "@/lib/proofs";
 
-const config = getPublicConfig();
-
-type LedgerResponse = SerializedLedger & { error?: string };
+type LedgerResponse = SerializedLedger & { error?: string; network?: string };
 
 export function Ledger({
   initialData,
   initialError,
+  networkId,
 }: {
   initialData: SerializedLedger | null;
   initialError: string | null;
+  networkId: NetworkId;
 }) {
+  const network = getNetwork(networkId);
+  const base = getNetwork("base");
   const [data, setData] = useState<LedgerSnapshot | null>(() =>
     initialData ? deserializeLedger(initialData) : null,
   );
@@ -49,11 +51,16 @@ export function Ledger({
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
 
+  useEffect(() => {
+    setData(initialData ? deserializeLedger(initialData) : null);
+    setError(initialError);
+  }, [initialData, initialError, networkId]);
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/ledger", { cache: "no-store" });
+      const response = await fetch(`/api/ledger?network=${networkId}`, { cache: "no-store" });
       const body = (await response.json()) as LedgerResponse;
       if (!response.ok) {
         throw new Error(body.error || `Ledger request failed (${response.status})`);
@@ -80,7 +87,35 @@ export function Ledger({
     });
   }, [data, query]);
 
-  if (!config.settlementProofsAddress && !data) {
+  if (network.role === "payment") {
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle>Base is the payment rail</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>{network.blurb}</p>
+          <p>
+            Switch the network control to <strong className="text-foreground">Arc</strong> or{" "}
+            <strong className="text-foreground">Tempo</strong> to read the append-only
+            SettlementProofs registry. Each proof still links its Base{" "}
+            <code className="text-llx-link">srcTxHash</code> on BaseScan.
+          </p>
+          <a
+            href={base.explorer}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-llx-link hover:text-foreground"
+          >
+            Open Base explorer
+            <ExternalLink className="size-3.5" />
+          </a>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!network.settlementProofsAddress && !data) {
     return (
       <Card className="border-border bg-card">
         <CardHeader>
@@ -88,8 +123,8 @@ export function Ledger({
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Set <code className="text-foreground">NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS</code> to
-            the redeployed Arc contract, then rebuild or restart the web app.
+            Set the SettlementProofs address for {network.label}, then rebuild or restart the web
+            app.
           </p>
           <p>No wallet is required to read this registry.</p>
         </CardContent>
@@ -108,7 +143,7 @@ export function Ledger({
         <StatCard
           label="Proofs"
           value={data ? String(data.proofCount) : "—"}
-          hint="Append-only records"
+          hint={`Append-only on ${network.label}`}
         />
       </div>
 
@@ -124,14 +159,14 @@ export function Ledger({
           />
         </div>
         <div className="flex items-center gap-2">
-          {config.settlementProofsAddress ? (
+          {network.settlementProofsAddress ? (
             <a
-              href={arcAddressUrl(config.arcExplorer, config.settlementProofsAddress)}
+              href={explorerAddressUrl(network.explorer, network.settlementProofsAddress)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-sm text-llx-link hover:text-foreground"
             >
-              Contract on Arc
+              Contract on {network.shortLabel}
               <ExternalLink className="size-3.5" />
             </a>
           ) : null}
@@ -145,7 +180,7 @@ export function Ledger({
       {error ? (
         <Card className="border-destructive/40 bg-destructive/10">
           <CardContent className="pt-6 text-sm">
-            Could not read the Arc registry: {error}
+            Could not read the {network.label} registry: {error}
           </CardContent>
         </Card>
       ) : null}
@@ -153,8 +188,8 @@ export function Ledger({
       {data && data.proofs.length === 0 ? (
         <Card className="border-dashed border-white/15 bg-card/50">
           <CardContent className="py-12 text-center text-muted-foreground">
-            No settlement proofs recorded yet. When the treasurer pays USDC on Base, the
-            recorder notarizes an immutable proof on Arc here.
+            No settlement proofs recorded yet on {network.label}. When the treasurer pays USDC on
+            Base, the recorder notarizes an immutable proof here.
           </CardContent>
         </Card>
       ) : null}
@@ -174,7 +209,7 @@ export function Ledger({
               </TableHeader>
               <TableBody>
                 {filtered.map((proof) => (
-                  <ProofRow key={proof.refId} proof={proof} />
+                  <ProofRow key={proof.refId} proof={proof} networkId={networkId} />
                 ))}
               </TableBody>
             </Table>
@@ -182,7 +217,7 @@ export function Ledger({
 
           <div className="grid gap-3 md:hidden">
             {filtered.map((proof) => (
-              <ProofCard key={proof.refId} proof={proof} />
+              <ProofCard key={proof.refId} proof={proof} networkId={networkId} />
             ))}
           </div>
         </>
@@ -209,7 +244,8 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint: 
   );
 }
 
-function ProofRow({ proof }: { proof: LedgerProof }) {
+function ProofRow({ proof, networkId }: { proof: LedgerProof; networkId: NetworkId }) {
+  const base = getNetwork("base");
   return (
     <TableRow className="border-border">
       <TableCell className="whitespace-nowrap text-llx-mono">
@@ -217,7 +253,7 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
       </TableCell>
       <TableCell>
         <a
-          href={baseAddressUrl(config.baseExplorer, proof.payee)}
+          href={explorerAddressUrl(base.explorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
           className="font-mono text-sm text-llx-link hover:text-foreground"
@@ -241,13 +277,14 @@ function ProofRow({ proof }: { proof: LedgerProof }) {
         </span>
       </TableCell>
       <TableCell className="text-right">
-        <ProofExplorerLinks proof={proof} />
+        <ProofExplorerLinks proof={proof} networkId={networkId} />
       </TableCell>
     </TableRow>
   );
 }
 
-function ProofCard({ proof }: { proof: LedgerProof }) {
+function ProofCard({ proof, networkId }: { proof: LedgerProof; networkId: NetworkId }) {
+  const base = getNetwork("base");
   return (
     <Card className="border-border bg-card/80">
       <CardContent className="space-y-3 pt-5">
@@ -258,7 +295,7 @@ function ProofCard({ proof }: { proof: LedgerProof }) {
           </div>
         </div>
         <a
-          href={baseAddressUrl(config.baseExplorer, proof.payee)}
+          href={explorerAddressUrl(base.explorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
           className="font-mono text-sm text-llx-link hover:text-foreground"
@@ -274,9 +311,8 @@ function ProofCard({ proof }: { proof: LedgerProof }) {
             </Badge>
           ) : null}
         </p>
-        <ProofExplorerLinks proof={proof} />
+        <ProofExplorerLinks proof={proof} networkId={networkId} />
       </CardContent>
     </Card>
   );
 }
-
