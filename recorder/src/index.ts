@@ -24,6 +24,8 @@ import {
   writeProof,
 } from "./arc.js";
 import { createBaseClient, verifyBasePayment } from "./base.js";
+import { isGasLow, lowGasError } from "./gas-guard.js";
+import { type ArcReader, findProofId, findProofTxHash } from "./proof-lookup.js";
 import {
   ARC_ERC20_USDC_DECIMALS,
   ARC_NATIVE_USDC_DECIMALS,
@@ -58,6 +60,29 @@ const baseClient = createBaseClient(config.baseRpcUrl);
 const WRITE_RATE_WINDOW_MS = 60_000;
 const WRITE_RATE_MAX = 30;
 const writeHitsByIp = new Map<string, number[]>();
+
+/** Lookup path: 120 GETs per IP per minute. */
+const READ_RATE_MAX = 120;
+const readHitsByIp = new Map<string, number[]>();
+
+const arcReader = arc.publicClient as unknown as ArcReader;
+
+/**
+ * Best-effort proofId + Arc tx for a recorded refId (null on RPC error).
+ * Sequential on purpose: the public Arc RPC rate-limits bursts.
+ */
+async function proofLocation(
+  refId: Hex,
+  recordedAt?: number,
+): Promise<{ proofId: number | null; proofTxHash: Hex | null }> {
+  const proofId = await findProofId(arcReader, config.settlementProofsAddress, refId).catch(
+    () => null,
+  );
+  const proofTxHash = await findProofTxHash(arcReader, config.settlementProofsAddress, refId, {
+    recordedAt,
+  }).catch(() => null);
+  return { proofId, proofTxHash };
+}
 
 function clientIp(c: { req: { header: (name: string) => string | undefined } }): string {
   const forwarded = c.req.header("x-forwarded-for");
@@ -128,6 +153,9 @@ app.get("/health", async (c) => {
       /** Native gas USDC wei (18 decimals) — not ERC-20 6-dec units. */
       recorderArcBalanceWei: recorderBalance.toString(),
       recorderArcBalanceDecimals: ARC_NATIVE_USDC_DECIMALS,
+      /** Writes are refused (503 LOW_GAS_BALANCE) below this native wei balance. */
+      minRecorderGasWei: config.minRecorderGasWei.toString(),
+      lowGas: isGasLow(recorderBalance, config.minRecorderGasWei),
       proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
       minConfirmations: config.minConfirmations,
       settlementRail: "base-usdc-notarize-arc",
@@ -172,8 +200,11 @@ app.post("/v1/proofs", async (c) => {
       refId,
     });
     if (existing) {
+      const loc = await proofLocation(refId, existing.recordedAt);
       return c.json({
         idempotent: true,
+        proofId: loc.proofId,
+        proofTxHash: loc.proofTxHash,
         proof: serializeProof(existing),
       });
     }
@@ -187,6 +218,22 @@ app.post("/v1/proofs", async (c) => {
     });
 
     const paidAt = parsed.paidAt ?? Number(verified.blockTimestamp);
+
+    // Low-balance guard: fail fast with 503 instead of failing mid-write.
+    const gasBalance = await readRecorderNativeGasBalance({
+      publicClient: arc.publicClient,
+      address: arc.account.address,
+    });
+    if (isGasLow(gasBalance, config.minRecorderGasWei)) {
+      console.warn(
+        JSON.stringify({
+          msg: "recorder gas low — refusing write",
+          balanceWei: gasBalance.toString(),
+          minWei: config.minRecorderGasWei.toString(),
+        }),
+      );
+      throw lowGasError(gasBalance, config.minRecorderGasWei);
+    }
 
     let proofTxHash: Hex;
     try {
@@ -210,8 +257,11 @@ app.post("/v1/proofs", async (c) => {
           refId,
         });
         if (raced) {
+          const loc = await proofLocation(refId, raced.recordedAt);
           return c.json({
             idempotent: true,
+            proofId: loc.proofId,
+            proofTxHash: loc.proofTxHash,
             proof: serializeProof(raced),
           });
         }
@@ -225,9 +275,14 @@ app.post("/v1/proofs", async (c) => {
       refId,
     });
 
+    const proofId = await findProofId(arcReader, config.settlementProofsAddress, refId).catch(
+      () => null,
+    );
+
     return c.json(
       {
         idempotent: false,
+        proofId,
         proofTxHash,
         proof: proof
           ? serializeProof(proof)
@@ -248,6 +303,61 @@ app.post("/v1/proofs", async (c) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error(JSON.stringify({ msg: "record proof failed", code, message }));
     return c.json({ error: message, code }, status as 400);
+  }
+});
+
+/**
+ * Read-only lookup for idempotency (no Arc write, no Base verify).
+ * Query by ?refId=0x… or by ?txHash=&payee=&amountUSDC= (refId derived exactly
+ * like POST /v1/proofs). 200 { found: true, … } or 404 { found: false, refId }.
+ */
+app.get("/v1/proofs/lookup", async (c) => {
+  const auth = requireAuth(c);
+  if (auth !== true) {
+    return c.json({ error: auth.error, code: auth.code }, auth.status);
+  }
+  if (!checkRateLimit(readHitsByIp, clientIp(c), WRITE_RATE_WINDOW_MS, READ_RATE_MAX)) {
+    return c.json({ error: "Rate limit exceeded (120 requests/minute)", code: "RATE_LIMITED" }, 429);
+  }
+
+  let refId: Hex;
+  const rawRef = c.req.query("refId");
+  if (rawRef) {
+    if (!isHex(rawRef) || rawRef.length !== 66) {
+      return c.json({ error: "refId must be a 32-byte 0x-prefixed hex string" }, 400);
+    }
+    refId = rawRef;
+  } else {
+    const parsed = parseBody({
+      txHash: c.req.query("txHash"),
+      payee: c.req.query("payee"),
+      amountUSDC: c.req.query("amountUSDC"),
+    });
+    if ("error" in parsed) {
+      return c.json({ error: parsed.error }, 400);
+    }
+    refId = deriveRefId(parsed.txHash, parsed.payee, parsed.amountUSDC);
+  }
+
+  try {
+    const existing = await readProof({
+      publicClient: arc.publicClient,
+      address: config.settlementProofsAddress,
+      refId,
+    });
+    if (!existing) {
+      return c.json({ found: false, refId }, 404);
+    }
+    const loc = await proofLocation(refId, existing.recordedAt);
+    return c.json({
+      found: true,
+      proofId: loc.proofId,
+      proofTxHash: loc.proofTxHash,
+      proof: serializeProof(existing),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: message, code: "ARC_READ_FAILED" }, 503);
   }
 });
 

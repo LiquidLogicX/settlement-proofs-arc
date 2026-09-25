@@ -16,6 +16,7 @@ Programmatic chain access uses JSON-RPC only (`BASE_RPC_URL`, `ARC_RPC_URL=https
 | --- | --- | --- |
 | `GET` | `/health` | RPC reachability, recorder address, Arc gas balance (open, no auth) |
 | `POST` | `/v1/proofs` | Verify Base USDC tx and record a proof (**requires API key**) |
+| `GET` | `/v1/proofs/lookup` | Read-only: is this proof already recorded? Returns `proofId` + Arc `proofTxHash` (**requires API key**) |
 
 ### Auth
 
@@ -68,6 +69,24 @@ Sample **201** response:
 
 Idempotent on `refId`: a retry of the same id returns **200** with the existing proof and does not send a second Arc transaction.
 
+Both 201 and idempotent 200 responses also carry (additive, best-effort — `null` if the Arc RPC read fails):
+
+- `proofId` — 1-based position in the registry (`getProofAt(proofId - 1)`). Proof #1 is index 0.
+- `proofTxHash` — Arc tx that emitted `PaymentRecorded` for the `refId` (on idempotent 200 it is found via `eth_getLogs` by indexed `refId`).
+
+### Low gas guard
+
+Before any Arc write the recorder reads its native gas balance. Below `MIN_RECORDER_GAS_WEI` (default `50000000000000000` = 0.05 native USDC, 18 decimals) it logs a warning and returns **503** `{ "code": "LOW_GAS_BALANCE" }` without writing. The idempotent path (proof already exists) still answers. `/health` exposes `minRecorderGasWei` and `lowGas`.
+
+### `GET /v1/proofs/lookup`
+
+Used by `audit.liquidlogicx.com/api/prove` for idempotency before it asks for a write.
+
+- `?refId=0x…`, or
+- `?txHash=0x…&payee=0x…&amountUSDC=1000` (refId derived exactly as for `POST`).
+
+`200 { "found": true, "proofId": 1, "proofTxHash": "0x…", "proof": { … } }` or `404 { "found": false, "refId": "0x…" }`. Arc RPC error → `503 ARC_READ_FAILED`. Rate limit 120/IP/minute.
+
 ### Base USDC check (strict — no bypass)
 
 The service requires the Base tx to be **mined**, **successful**, and to have at least `MIN_CONFIRMATIONS` (**default 12**) confirmations.
@@ -107,6 +126,6 @@ Environment variables (sync: false / secret in the dashboard):
 - `SETTLEMENT_RECORDER_PRIVATE_KEY`
 - `RECORDER_API_KEY`
 
-Optional: `MIN_CONFIRMATIONS` (default `12`), `HOST`.
+Optional: `MIN_CONFIRMATIONS` (default `12`), `MIN_RECORDER_GAS_WEI` (default 0.05 native USDC in 18-dec wei), `HOST`.
 
 Do not put private keys or API keys in the image, Blueprint values, or git.
