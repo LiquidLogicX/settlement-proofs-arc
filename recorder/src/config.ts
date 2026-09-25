@@ -1,5 +1,6 @@
 import { type Address, type Hex, isAddress, isHex } from "viem";
 import { ARC_ERC20_USDC, BASE_USDC } from "./decimals.js";
+import { parseMinGasWei } from "./gas-guard.js";
 
 /** @deprecated Prefer ARC_ERC20_USDC from decimals.ts (typed 6-dec ERC-20). */
 export const ARC_USDC = ARC_ERC20_USDC;
@@ -17,6 +18,8 @@ export type AppConfig = {
   recorderPrivateKey: Hex;
   minConfirmations: number;
   recorderApiKey: string;
+  /** Refuse Arc writes below this native gas balance (18-dec wei). */
+  minRecorderGasWei: bigint;
 };
 
 function required(name: string): string {
@@ -73,5 +76,6 @@ export function loadConfig(): AppConfig {
     // orphaned by a shallow reorganization of recent blocks.
     minConfirmations: Math.max(1, Number(process.env.MIN_CONFIRMATIONS ?? "12")),
     recorderApiKey: required("RECORDER_API_KEY"),
+    minRecorderGasWei: parseMinGasWei(process.env.MIN_RECORDER_GAS_WEI),
   };
 }
