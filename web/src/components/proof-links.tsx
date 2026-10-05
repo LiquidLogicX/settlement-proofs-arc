@@ -5,32 +5,33 @@ import {
   getNetwork,
   type NetworkId,
 } from "@/lib/config";
+import { paymentOf } from "@/lib/payments";
 import type { LedgerProof } from "@/lib/proofs";
 
-/** Explicit Base payment + registry proof / explorer links for a recorded proof. */
+/** Payment tx (Base or Tempo) + registry proof / explorer links for a recorded proof. */
 export function ProofExplorerLinks({
   proof,
   align = "end",
   networkId = "arc",
 }: {
-  proof: Pick<LedgerProof, "srcTxHash" | "proofTxHash">;
+  proof: Pick<LedgerProof, "srcTxHash" | "proofTxHash" | "memo" | "payment">;
   align?: "start" | "end";
   networkId?: NetworkId;
 }) {
   const justify = align === "end" ? "justify-end" : "justify-start";
   const registry = getNetwork(networkId === "base" ? "arc" : networkId);
-  const base = getNetwork("base");
+  const payment = paymentOf(proof, networkId === "base" ? "arc" : networkId);
 
   return (
     <div className={`flex flex-wrap gap-2 ${justify}`}>
       <a
-        href={explorerTxUrl(base.explorer, proof.srcTxHash)}
+        href={explorerTxUrl(payment.explorer, proof.srcTxHash)}
         target="_blank"
         rel="noreferrer"
         className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-llx-link hover:text-foreground"
         title={proof.srcTxHash}
       >
-        Base payment tx
+        {payment.label} payment tx
         <ExternalLink className="size-3" />
       </a>
       {proof.proofTxHash ? (

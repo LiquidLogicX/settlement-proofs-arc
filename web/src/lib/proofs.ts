@@ -8,6 +8,7 @@ import {
   parseEventLogs,
 } from "viem";
 import { settlementProofsAbi } from "./abi";
+import { mapLimit, resolvePayment, type PaymentInfo } from "./payments";
 import {
   getNetwork,
   getPublicConfig,
@@ -32,6 +33,8 @@ export type LedgerProof = {
   recordedAt: number;
   /** Arc tx that wrote the proof (registry recordPayment), if event scan succeeds. */
   proofTxHash: Hex | null;
+  /** Payment chain + independent on-chain re-check (payer, token). Null if not resolved. */
+  payment: PaymentInfo | null;
 };
 
 export type LedgerSnapshot = {
@@ -231,14 +234,28 @@ function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
     memo: raw.memo,
     recordedAt: Number(raw.recordedAt),
     proofTxHash,
+    payment: null,
   };
+}
+
+/** Attach payment source + on-chain payment re-check (best effort, never throws). */
+async function withPayment(proof: LedgerProof, networkId: NetworkId): Promise<LedgerProof> {
+  const payment = await resolvePayment({
+    registry: networkId,
+    memo: proof.memo,
+    srcTxHash: proof.srcTxHash,
+    payee: proof.payee,
+    amountUSDC: proof.amountUSDC,
+    synthetic: isTempoSyntheticSelfTest({ networkId, memo: proof.memo, refId: proof.refId }),
+  });
+  return { ...proof, payment };
 }
 
 /**
  * Arc public RPC caps eth_getLogs to a ~10_000-block range (span 10_000 fails;
  * span 9_999 works). Walk newest→oldest in LOG_CHUNK_SIZE windows.
  */
-const LOG_CHUNK_SIZE = BigInt(9_000);
+const DEFAULT_LOG_CHUNK_SIZE = BigInt(9_000);
 /** Max windows from tip (~2.3M blocks). Enough for current registry depth. */
 const LOG_MAX_WINDOWS = 256;
 
@@ -249,17 +266,24 @@ async function scanPaymentRecordedTxMap(
     refId?: Hex;
     /** Stop once every lowercase refId in this set is mapped. */
     neededRefIds?: Set<string>;
+    /** Network-specific eth_getLogs span + earliest block (registry deploy). */
+    network?: NetworkDefinition;
+    /** Cap on backward windows from tip (default LOG_MAX_WINDOWS). */
+    maxWindows?: number;
   },
 ): Promise<Map<string, Hex>> {
   const map = new Map<string, Hex>();
   const needed = options?.neededRefIds;
+  const LOG_CHUNK_SIZE = options?.network?.logChunk ?? DEFAULT_LOG_CHUNK_SIZE;
+  const floor = options?.network?.logsFromBlock ?? BigInt(0);
 
   try {
     let toBlock = await client.getBlockNumber();
 
-    for (let window = 0; window < LOG_MAX_WINDOWS; window++) {
-      const fromBlock =
+    for (let window = 0; window < (options?.maxWindows ?? LOG_MAX_WINDOWS); window++) {
+      let fromBlock =
         toBlock + BigInt(1) >= LOG_CHUNK_SIZE ? toBlock - (LOG_CHUNK_SIZE - BigInt(1)) : BigInt(0);
+      if (fromBlock < floor) fromBlock = floor;
 
       const logs = await client.getContractEvents({
         address,
@@ -290,7 +314,7 @@ async function scanPaymentRecordedTxMap(
         if (allFound) break;
       }
 
-      if (fromBlock === BigInt(0)) break;
+      if (fromBlock <= floor) break;
       toBlock = fromBlock - BigInt(1);
     }
   } catch {
@@ -300,12 +324,72 @@ async function scanPaymentRecordedTxMap(
   return map;
 }
 
+/**
+ * Estimate the block mined at `unixSeconds` from the tip and a sample block
+ * (average block time). Two cheap reads instead of walking millions of blocks:
+ * Arc and Tempo both produce ~2 blocks/s, so a full backward scan from tip
+ * stops reaching older proofs after ~2 weeks.
+ */
+async function estimateBlockAt(client: PublicClient, unixSeconds: number): Promise<bigint> {
+  const tip = await client.getBlockNumber();
+  const span = BigInt(200_000);
+  const tipBlock = await client.getBlock({ blockNumber: tip });
+  const sampleNumber = tip > span ? tip - span : BigInt(0);
+  const sample = await client.getBlock({ blockNumber: sampleNumber });
+  const dt = Number(tipBlock.timestamp - sample.timestamp);
+  const blocks = Number(tip - sampleNumber);
+  if (dt <= 0 || blocks <= 0) return tip;
+  const back = Math.max(0, Math.round((Number(tipBlock.timestamp) - unixSeconds) / (dt / blocks)));
+  return BigInt(back) >= tip ? BigInt(0) : tip - BigInt(back);
+}
+
+/** Registry tx for refId, searched in windows around the block estimated from recordedAt. */
+async function findProofTxNear(
+  client: PublicClient,
+  address: Address,
+  refId: Hex,
+  recordedAt: number,
+  network?: NetworkDefinition,
+): Promise<Hex | null> {
+  if (!recordedAt) return null;
+  try {
+    const chunk = network?.logChunk ?? DEFAULT_LOG_CHUNK_SIZE;
+    const floor = network?.logsFromBlock ?? BigInt(0);
+    const tip = await client.getBlockNumber();
+    const center = await estimateBlockAt(client, recordedAt);
+    const half = chunk / BigInt(2);
+    for (let w = 0; w < 12; w++) {
+      const k = BigInt(Math.ceil(w / 2));
+      const shift = w === 0 ? BigInt(0) : (w % 2 === 1 ? BigInt(1) : BigInt(-1)) * k * chunk;
+      let from = center - half + shift;
+      let to = center + half - BigInt(1) + shift;
+      if (to < floor || from > tip) continue;
+      if (from < floor) from = floor;
+      if (to > tip) to = tip;
+      const logs = await client.getContractEvents({
+        address,
+        abi: settlementProofsAbi,
+        eventName: "PaymentRecorded",
+        args: { refId },
+        fromBlock: from,
+        toBlock: to,
+      });
+      const hit = logs.find((l) => l.transactionHash && l.args.refId?.toLowerCase() === refId.toLowerCase());
+      if (hit?.transactionHash) return hit.transactionHash;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
 async function findProofTxByRef(
   client: PublicClient,
   address: Address,
   refId: Hex,
+  network?: NetworkDefinition,
 ): Promise<Hex | null> {
-  const map = await scanPaymentRecordedTxMap(client, address, { refId });
+  const map = await scanPaymentRecordedTxMap(client, address, { refId, network });
   return map.get(refId.toLowerCase()) ?? null;
 }
 
@@ -314,6 +398,7 @@ async function readProofByRef(
   address: Address,
   refId: Hex,
   proofTxHash?: Hex | null,
+  network?: NetworkDefinition,
 ): Promise<LedgerProof> {
   const raw = await client.readContract({
     address,
@@ -322,13 +407,16 @@ async function readProofByRef(
     args: [refId],
   });
   const tx =
-    proofTxHash !== undefined ? proofTxHash : await findProofTxByRef(client, address, refId);
+    proofTxHash !== undefined && proofTxHash !== null
+      ? proofTxHash
+      : ((await findProofTxNear(client, address, refId, Number(raw.recordedAt), network)) ??
+        (await findProofTxByRef(client, address, refId, network)));
   return toLedgerProof(raw, tx);
 }
 
 /** Programmatic ledger: registry JSON-RPC only (eth_call / getLogs). Never explorer HTTP APIs. */
 export async function fetchLedger(networkId: NetworkId = "arc"): Promise<LedgerSnapshot> {
-  const { client, address } = requireRegistryContext(networkId);
+  const { client, address, network } = requireRegistryContext(networkId);
 
   const [proofCount, totalSettled] = await Promise.all([
     client.readContract({ address, abi: settlementProofsAbi, functionName: "proofCount" }),
@@ -354,7 +442,13 @@ export async function fetchLedger(networkId: NetworkId = "arc"): Promise<LedgerS
   const proofTxByRef =
     neededRefIds.size === 0
       ? new Map<string, Hex>()
-      : await scanPaymentRecordedTxMap(client, address, { neededRefIds });
+      : await scanPaymentRecordedTxMap(client, address, { neededRefIds, network, maxWindows: 4 });
+  for (const proof of rawProofs) {
+    const key = proof.refId.toLowerCase();
+    if (proofTxByRef.has(key)) continue;
+    const tx = await findProofTxNear(client, address, proof.refId, Number(proof.recordedAt), network);
+    if (tx) proofTxByRef.set(key, tx);
+  }
 
   const proofs: LedgerProof[] = rawProofs
     .map((proof) =>
@@ -362,7 +456,8 @@ export async function fetchLedger(networkId: NetworkId = "arc"): Promise<LedgerS
     )
     .sort((a, b) => b.paidAt - a.paidAt || Number(b.recordedAt) - Number(a.recordedAt));
 
-  return { proofCount, totalSettled, proofs };
+  const enriched = await mapLimit(proofs, 4, (proof) => withPayment(proof, networkId));
+  return { proofCount, totalSettled, proofs: enriched };
 }
 
 /**
@@ -393,7 +488,10 @@ export async function lookupProof(
   });
 
   if (exists) {
-    const proof = await readProofByRef(client, address, query);
+    const proof = await withPayment(
+      await readProofByRef(client, address, query, undefined, network),
+      networkId,
+    );
     return {
       status: "found",
       query,
@@ -415,11 +513,9 @@ export async function lookupProof(
       (event) => event.address.toLowerCase() === address.toLowerCase() && event.args.refId,
     );
     if (match?.args.refId) {
-      const proof = await readProofByRef(
-        client,
-        address,
-        match.args.refId,
-        receipt.transactionHash,
+      const proof = await withPayment(
+        await readProofByRef(client, address, match.args.refId, receipt.transactionHash, network),
+        networkId,
       );
       return {
         status: "found",
@@ -458,8 +554,10 @@ export async function lookupProof(
     for (let i = rawProofs.length - 1; i >= 0; i--) {
       const raw = rawProofs[i];
       if (raw.srcTxHash.toLowerCase() === query) {
-        const proofTxHash = await findProofTxByRef(client, address, raw.refId);
-        const proof = toLedgerProof(raw, proofTxHash);
+        const proofTxHash =
+          (await findProofTxNear(client, address, raw.refId, Number(raw.recordedAt), network)) ??
+          (await findProofTxByRef(client, address, raw.refId, network));
+        const proof = await withPayment(toLedgerProof(raw, proofTxHash), networkId);
         return {
           status: "found",
           query,
@@ -487,7 +585,7 @@ export async function fetchProofByRefId(
   const refId = normalizeBytes32Query(rawRefId);
   if (!refId) return null;
 
-  const { client, address } = requireRegistryContext(networkId);
+  const { client, address, network } = requireRegistryContext(networkId);
   const exists = await client.readContract({
     address,
     abi: settlementProofsAbi,
@@ -495,7 +593,7 @@ export async function fetchProofByRefId(
     args: [refId],
   });
   if (!exists) return null;
-  return readProofByRef(client, address, refId);
+  return withPayment(await readProofByRef(client, address, refId, undefined, network), networkId);
 }
 
 

@@ -1,6 +1,13 @@
 # Settlement recorder
 
-Hono + viem service that verifies a **Base** USDC payment and appends an immutable **notarization** on **Arc** (Decision **1A+2B**).
+Hono + viem service that verifies a stablecoin payment on-chain and appends an immutable proof to a `SettlementProofs` registry. It runs one or both **rails**:
+
+| Rail | Payment verified on | Proof written on | Enabled by |
+| --- | --- | --- | --- |
+| `arc` | Base USDC (`eip155:8453`) | Arc (`eip155:5042`) | `SETTLEMENT_PROOFS_ADDRESS` + `SETTLEMENT_RECORDER_PRIVATE_KEY` |
+| `tempo` | Tempo TIP-20 stablecoin (`eip155:42431`) | Tempo (same chain) | `TEMPO_SETTLEMENT_PROOFS_ADDRESS` + `TEMPO_RECORDER_PRIVATE_KEY` |
+
+At least one rail must be configured. The Arc rail below is unchanged (Decision **1A+2B**); the Tempo rail is described in [Tempo rail](#tempo-rail) and [`../docs/tempo-testnet.md`](../docs/tempo-testnet.md).
 
 Payees are **public** (Decision 2B): cleartext `payee` is accepted in the authenticated write body and stored on-chain. `srcTxHash` is the **Base** payment transaction hash and stays public. There is no confidentiality claim, no `/open`, no HMAC / `VIEW_SALT_*`.
 
@@ -14,8 +21,9 @@ Programmatic chain access uses JSON-RPC only (`BASE_RPC_URL`, `ARC_RPC_URL=https
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | RPC reachability, recorder address, Arc gas balance (open, no auth) |
-| `POST` | `/v1/proofs` | Verify Base USDC tx and record a proof (**requires API key**) |
+| `GET` | `/health` | RPC reachability, recorder address, gas balance; `rails` lists each configured rail (open, no auth) |
+| `POST` | `/v1/proofs` | Verify the payment and record a proof (**requires API key**). Optional `chain`: `"base"`/`"arc"` (default when Arc is configured), `"tempo"`, or a CAIP-2 id |
+| `POST` | `/v1/tempo/proofs` | Same as `/v1/proofs` with `chain: "tempo"` |
 | `GET` | `/v1/proofs/lookup` | Read-only: is this proof already recorded? Returns `proofId` + Arc `proofTxHash` (**requires API key**) |
 
 ### Auth
@@ -74,6 +82,46 @@ Both 201 and idempotent 200 responses also carry (additive, best-effort — `nul
 - `proofId` — 1-based position in the registry (`getProofAt(proofId - 1)`). Proof #1 is index 0.
 - `proofTxHash` — Arc tx that emitted `PaymentRecorded` for the `refId` (on idempotent 200 it is found via `eth_getLogs` by indexed `refId`).
 
+### Tempo rail
+
+```http
+POST /v1/tempo/proofs
+Authorization: Bearer <RECORDER_API_KEY>
+Content-Type: application/json
+
+{ "txHash": "0x592d…eb71", "payee": "0xfd68…45c7", "amountUSDC": "12500000", "memo": "Design retainer, Oct" }
+```
+
+- `txHash` is the **Tempo** payment transaction. The receipt must be successful, have `TEMPO_MIN_CONFIRMATIONS` (default 1; Tempo finality is deterministic), and contain a `Transfer(from, to=payee, value=amountUSDC)` log emitted by an allowlisted TIP-20 stablecoin (`TEMPO_ALLOWED_TOKENS`, default pathUSD/AlphaUSD/BetaUSD/ThetaUSD). Otherwise `400 TIP20_AMOUNT_UNVERIFIED` and nothing is written.
+- `amountUSDC` is in the token's 6-decimal units (all TIP-20 tokens use 6 decimals).
+- The on-chain memo becomes `eip155:42431/<TokenSymbol> <note>` (note capped at 128 chars). `note` = request `memo`, else the payer's TIP-20 `transferWithMemo` text, else empty. The Arc rail rejects memos that start with an `eip155:` tag, so a Base proof can't pose as a Tempo one.
+- Fees are paid in pathUSD. Before writing, the recorder requires `TEMPO_MIN_RECORDER_FEE_BALANCE` (default 0.05 pathUSD) or returns `503 LOW_GAS_BALANCE`.
+- Chain `4217` (Tempo mainnet) is refused at startup unless `TEMPO_ALLOW_MAINNET=true`. The Tempo key must differ from the Arc recorder key.
+
+Response (`201` new, `200` idempotent):
+
+```json
+{
+  "idempotent": true,
+  "proofId": 1,
+  "proofTxHash": "0xa74d…2dda",
+  "proof": { "refId": "0x064a…c14c", "payee": "0xfd68…45c7", "amountUSDC": "12500000",
+             "paidAt": 1791223316, "srcTxHash": "0x592d…eb71",
+             "memo": "eip155:42431/AlphaUSD Design retainer, Oct", "recordedAt": 1791223318 },
+  "rail": "tempo",
+  "payment": { "chain": "eip155:42431", "payer": "0x5eA5…1f49", "payee": "0xfd68…45c7",
+               "amountUSDC": "12500000", "token": "0x20C0…0001", "tokenSymbol": "AlphaUSD",
+               "transferMemo": "INV-2026-1001", "explorerUrl": "https://explore.testnet.tempo.xyz/tx/0x592d…", "verified": true },
+  "registry": { "chain": "eip155:42431", "contract": "0x2ec4…2c0b", "txHash": "0xa74d…2dda",
+                "explorerUrl": "https://explore.testnet.tempo.xyz/tx/0xa74d…" },
+  "verifyUrl": "https://proofs.liquidlogicx.com/proofs/0x064a…c14c?network=tempo"
+}
+```
+
+Arc-rail responses keep every existing field and add the same `rail`, `payment`, `registry` and `verifyUrl` blocks. `GET /v1/proofs/lookup` takes `chain=tempo` too.
+
+Demo client: `npm run demo:tempo -- --amount 1.25 --token AlphaUSD --memo "INV-1001" --note "…"` (pays with `transferWithMemo` on Moderato, then posts to `RECORDER_URL`).
+
 ### Low gas guard
 
 Before any Arc write the recorder reads its native gas balance. Below `MIN_RECORDER_GAS_WEI` (default `50000000000000000` = 0.05 native USDC, 18 decimals) it logs a warning and returns **503** `{ "code": "LOW_GAS_BALANCE" }` without writing. The idempotent path (proof already exists) still answers. `/health` exposes `minRecorderGasWei` and `lowGas`.
@@ -99,7 +147,9 @@ Startup **rejects** env vars `ALLOW_UNVERIFIED_AMOUNT`, `VIEW_SALT_KEY`, `VIEW_S
 
 ```bash
 cp .env.example .env
-# fill BASE_RPC_URL, ARC_RPC_URL, SETTLEMENT_PROOFS_ADDRESS, SETTLEMENT_RECORDER_PRIVATE_KEY, RECORDER_API_KEY
+# Arc rail: BASE_RPC_URL, ARC_RPC_URL, SETTLEMENT_PROOFS_ADDRESS, SETTLEMENT_RECORDER_PRIVATE_KEY
+# Tempo rail: TEMPO_SETTLEMENT_PROOFS_ADDRESS, TEMPO_RECORDER_PRIVATE_KEY
+# Both: RECORDER_API_KEY
 npm install
 npm run typecheck
 npm test
@@ -127,5 +177,7 @@ Environment variables (sync: false / secret in the dashboard):
 - `RECORDER_API_KEY`
 
 Optional: `MIN_CONFIRMATIONS` (default `12`), `MIN_RECORDER_GAS_WEI` (default 0.05 native USDC in 18-dec wei), `HOST`.
+
+To enable the Tempo rail on the same service, add `TEMPO_SETTLEMENT_PROOFS_ADDRESS` and `TEMPO_RECORDER_PRIVATE_KEY` (secret), plus any optional `TEMPO_*` overrides from `.env.example`. Without them the service runs Arc-only, exactly as before. `render.yaml` is intentionally unchanged so a Blueprint sync can't alter the live service; add the Tempo vars by hand in the dashboard when approved.
 
 Do not put private keys or API keys in the image, Blueprint values, or git.
