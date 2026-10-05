@@ -32,7 +32,7 @@ export function SiteChrome({
                 alt="Liquid Logic X"
                 className="h-10 w-10 rounded-full object-cover"
               />
-              <p className="text-xs tracking-[0.35em] text-llx-label uppercase">
+              <p className="text-xs tracking-[0.35em] text-white uppercase">
                 Settlement proofs · Arc · Tempo · Base
               </p>
             </div>
@@ -47,7 +47,7 @@ export function SiteChrome({
                 href={selected.explorer}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full px-3 py-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                className="rounded-full px-3 py-1.5 text-white transition hover:bg-muted hover:text-white"
               >
                 {selected.shortLabel} explorer
               </a>
@@ -100,7 +100,7 @@ function NavLink({
       className={
         active
           ? "rounded-full bg-primary px-3 py-1.5 text-primary-foreground"
-          : "rounded-full px-3 py-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          : "rounded-full px-3 py-1.5 text-white transition hover:bg-muted hover:text-white"
       }
     >
       {children}
