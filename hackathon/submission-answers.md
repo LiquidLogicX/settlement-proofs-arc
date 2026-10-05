@@ -42,7 +42,7 @@ https://proofs.liquidlogicx.com/?network=tempo
 
 https://github.com/LiquidLogicX/settlement-proofs-arc (public, MIT)
 
-Tempo work is in PR: [PR LINK, filled in after the PR opens]. Key paths: `recorder/src/tempo.ts`, `recorder/src/rails.ts`, `web/src/lib/payments.ts`, `docs/tempo-testnet.md`.
+Tempo work: [PR #10](https://github.com/LiquidLogicX/settlement-proofs-arc/pull/10). Key paths: `recorder/src/tempo.ts`, `recorder/src/rails.ts`, `web/src/lib/payments.ts`, `docs/tempo-testnet.md`.
 
 ## Contract addresses
 
