@@ -13,11 +13,12 @@
 
 ## Before recording / submitting (Miles)
 
-1. Review and merge the Tempo PR, then deploy web (Vercel) so `proofs.liquidlogicx.com/?network=tempo` shows the three Tempo proofs. Check that `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` on Vercel is either unset or `0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b`. If it's still the old `0x35d7…ce51`, the Tempo tab will keep showing the old synthetic record.
-2. Optional: enable the Tempo rail on the Render recorder so new Tempo proofs can be recorded live (env vars in [`../docs/tempo-testnet.md`](../docs/tempo-testnet.md)). The demo works without it, because the three proofs are already on-chain.
-3. Fill in the `[MILES: …]` placeholders in `submission-answers.md` (team, location, background, the go-to-market numbers).
-4. Record both videos (see `pitch.md` and `demo-script.md`), upload them unlisted (YouTube or Loom), and paste the links into the form.
-5. Optional but recommended by Colosseum: weekly 1-minute update videos.
+1. **PR #10 is merged** (2026-10-05 PT); Vercel auto-deployed. Confirm `https://proofs.liquidlogicx.com/?network=tempo` shows **3 proofs**. Explicitly set Vercel env (team **liquid-logic-x** → project **settlement-proofs-arc**) per [`../docs/deployments.md`](../docs/deployments.md): `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS=0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b` (+ RPC/explorer/chain/from-block). Crew MCP write returned 403 on this scope — Miles must paste in the Vercel UI if the vars are still missing. Code already defaults to v2 when unset.
+2. Optional: enable the Tempo rail on Render `arc-settlement-recorder` so new Tempo proofs can be recorded live. Exact var **names**: [`../docs/render-tempo-env.md`](../docs/render-tempo-env.md). Miles pastes keys in the Render Environment tab only. Demo works without this (three proofs already on-chain).
+3. Fill in the `[MILES: …]` placeholders in `submission-answers.md` (team, location, background, traction numbers, video URLs).
+4. Record both videos (see `pitch.md` and `demo-script.md`), upload unlisted (YouTube or Loom), paste into the **Media and code** tab answers in `submission-answers.md`.
+5. Tempo **mainnet** deploy is prepared but **not** broadcast — see [`../docs/tempo-mainnet-prep.md`](../docs/tempo-mainnet-prep.md). Needs Miles's admin wallet address, funding in pathUSD, and explicit OK.
+6. Optional but recommended by Colosseum: weekly 1-minute update videos.
 
 ## Key links
 

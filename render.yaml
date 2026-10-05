@@ -9,6 +9,7 @@ services:
     dockerContext: ./recorder
     healthCheckPath: /health
     envVars:
+      # --- Arc rail (Base payment → Arc proof) ---
       - key: HOST
         value: "0.0.0.0"
       - key: BASE_RPC_URL
@@ -23,3 +24,24 @@ services:
         sync: false
       - key: MIN_CONFIRMATIONS
         value: "12"
+      # --- Tempo rail (Tempo payment → Tempo proof). Names only; Miles pastes secrets in Render UI.
+      # See docs/render-tempo-env.md. Leave TEMPO_* unset until Miles enables the rail.
+      - key: TEMPO_SETTLEMENT_PROOFS_ADDRESS
+        sync: false
+      - key: TEMPO_RECORDER_PRIVATE_KEY
+        sync: false
+      - key: TEMPO_RPC_URL
+        sync: false
+      - key: TEMPO_EXPLORER
+        sync: false
+      - key: TEMPO_MIN_CONFIRMATIONS
+        sync: false
+      - key: TEMPO_FEE_TOKEN
+        sync: false
+      - key: TEMPO_ALLOWED_TOKENS
+        sync: false
+      - key: TEMPO_MIN_RECORDER_FEE_BALANCE
+        sync: false
+      - key: PUBLIC_VERIFIER_URL
+        sync: false
+      # Do NOT set TEMPO_ALLOW_MAINNET until Miles approves Tempo mainnet (docs/tempo-mainnet-prep.md).

@@ -2,6 +2,8 @@
 
 Public Tempo testnet (**Moderato**) deploy of the same append-only `SettlementProofs` registry used on Arc. On Tempo, both the **payment** (a TIP-20 stablecoin transfer) and the **proof** live on Tempo. No mainnet from this workflow. Fees are paid in TIP-20 **pathUSD** (Tempo has no native gas token).
 
+Related: current vs superseded addresses in [`deployments.md`](deployments.md); Render Tempo env names in [`render-tempo-env.md`](render-tempo-env.md); mainnet prep (no broadcast) in [`tempo-mainnet-prep.md`](tempo-mainnet-prep.md).
+
 ## Network
 
 | Property | Value |
@@ -87,7 +89,7 @@ The Arc rail (`SETTLEMENT_PROOFS_ADDRESS`, `SETTLEMENT_RECORDER_PRIVATE_KEY`, `B
 
 ## Legacy registry v1 (2026-09-23 PT)
 
-Superseded by v2 above. Kept for history; still readable on-chain. To show it in the verifier, set `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS=0x35d7ec9B87A173774F18182c087bE3296efCce51`.
+**Superseded** by v2 above. Kept for history; still readable on-chain. **Hidden from the production verifier** — the web app defaults to v2 and must not point production at this address. See [`deployments.md`](deployments.md). (Local debugging only: override `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` — never on Vercel production.)
 
 | Item | Value |
 | --- | --- |

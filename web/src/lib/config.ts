@@ -56,7 +56,9 @@ function parseAddress(raw: string | undefined): Address | null {
 /** Selector order: registries first (Arc, Tempo), then the Base payment rail. */
 export const NETWORK_IDS: NetworkId[] = ["arc", "tempo", "base"];
 
-/** Tempo Moderato SettlementProofs v2 (2026-10-05): Tempo payment → Tempo proof. */
+/** Tempo Moderato SettlementProofs v2 (2026-10-05): Tempo payment → Tempo proof.
+ *  Production default. Legacy v1 (0x35d7…ce51) is superseded and must not be the verifier default
+ *  — see docs/deployments.md. */
 export const TEMPO_MODERATO_REGISTRY = "0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b";
 /** Deploy block of TEMPO_MODERATO_REGISTRY (log scans start here). */
 export const TEMPO_MODERATO_REGISTRY_FROM_BLOCK = "38311217";
