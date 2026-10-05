@@ -31,12 +31,12 @@ export default async function Home({ searchParams }: PageProps) {
       title={`Settlement proofs on ${network.label}`}
       subtitle={
         <>
-          Public networks: <span className="text-foreground">Arc</span>,{" "}
-          <span className="text-foreground">Base</span>, and{" "}
-          <span className="text-foreground">Tempo</span>. USDC payments stay on Base; Arc and
-          Tempo host append-only SettlementProofs registries with cleartext payee + public{" "}
-          <code className="text-llx-link">srcTxHash</code>. Not privacy. No wallet required to
-          read. {network.blurb}
+          Every proof links a real stablecoin payment to an append-only record anyone can check.{" "}
+          <span className="text-foreground">Arc</span> registry: USDC paid on{" "}
+          <span className="text-foreground">Base</span>.{" "}
+          <span className="text-foreground">Tempo</span> registry: TIP-20 stablecoins paid on
+          Tempo. Payer, payee, amount, and both transactions are public. No wallet needed to read.{" "}
+          {network.blurb}
         </>
       }
     >

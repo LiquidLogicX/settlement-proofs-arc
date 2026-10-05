@@ -33,12 +33,11 @@ export default async function ProofsPage({ searchParams }: PageProps) {
       title={`Verify a proof · ${network.label}`}
       subtitle={
         <>
-          Public verifier across <span className="text-foreground">Arc</span>,{" "}
-          <span className="text-foreground">Base</span>, and{" "}
-          <span className="text-foreground">Tempo</span>. Look up by settlement ID (
-          <code className="text-llx-link">refId</code>), registry proof tx, or Base{" "}
-          <code className="text-llx-link">srcTxHash</code>. Cleartext payee. Real RPC data only.
-          Not a privacy product.
+          Public verifier for <span className="text-foreground">Arc</span> and{" "}
+          <span className="text-foreground">Tempo</span> registries. Look up by settlement ID (
+          <code className="text-llx-link">refId</code>), proof record tx, or the payment tx (
+          <code className="text-llx-link">srcTxHash</code>) on Base or Tempo. The page re-checks
+          the payment on its own chain. Real RPC data only. Not a privacy product.
         </>
       }
     >

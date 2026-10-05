@@ -22,6 +22,8 @@ import {
   type NetworkId,
 } from "@/lib/config";
 import { ProofExplorerLinks } from "@/components/proof-links";
+import { ChainChip } from "@/components/proof-details";
+import { paymentOf } from "@/lib/payments";
 import { Badge } from "@/components/ui/badge";
 import {
   deserializeLedger,
@@ -81,6 +83,7 @@ export function Ledger({
     return data.proofs.filter((proof) => {
       return (
         proof.payee.toLowerCase().includes(q) ||
+        (proof.payment?.payer ?? "").toLowerCase().includes(q) ||
         proof.memo.toLowerCase().includes(q) ||
         proof.refId.toLowerCase().includes(q) ||
         proof.srcTxHash.toLowerCase().includes(q)
@@ -138,8 +141,12 @@ export function Ledger({
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Total settled"
-          value={data ? `${formatUsdc(data.totalSettled)} USDC` : "—"}
-          hint="Sum of notarized Base USDC (6-dec ERC-20 units)"
+          value={data ? `${formatUsdc(data.totalSettled)} ${networkId === "tempo" ? "USD" : "USDC"}` : "—"}
+          hint={
+            networkId === "tempo"
+              ? "Sum of notarized TIP-20 stablecoin payments on Tempo (6-dec units)"
+              : "Sum of notarized Base USDC (6-dec ERC-20 units)"
+          }
         />
         <StatCard
           label="Proofs"
@@ -154,7 +161,7 @@ export function Ledger({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by payee, memo, or hash"
+            placeholder="Filter by payer, payee, memo, or hash"
             className="border-border bg-background pl-8 text-foreground"
             aria-label="Filter proofs"
           />
@@ -189,8 +196,10 @@ export function Ledger({
       {data && data.proofs.length === 0 ? (
         <Card className="border-dashed border-white/15 bg-card/50">
           <CardContent className="py-12 text-center text-muted-foreground">
-            No settlement proofs recorded yet on {network.label}. When the treasurer pays USDC on
-            Base, the recorder notarizes an immutable proof here.
+            No settlement proofs recorded yet on {network.label}.{" "}
+            {networkId === "tempo"
+              ? "When a stablecoin payment lands on Tempo, the recorder verifies it and writes an immutable proof here."
+              : "When the treasurer pays USDC on Base, the recorder notarizes an immutable proof here."}
           </CardContent>
         </Card>
       ) : null}
@@ -202,7 +211,8 @@ export function Ledger({
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground">Date (UTC)</TableHead>
-                  <TableHead className="text-muted-foreground">Payee</TableHead>
+                  <TableHead className="text-muted-foreground">Chain</TableHead>
+                  <TableHead className="text-muted-foreground">Payer → Payee</TableHead>
                   <TableHead className="text-right text-muted-foreground">Amount</TableHead>
                   <TableHead className="text-muted-foreground">Memo</TableHead>
                   <TableHead className="text-right text-muted-foreground">Links</TableHead>
@@ -246,15 +256,33 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint: 
 }
 
 function ProofRow({ proof, networkId }: { proof: LedgerProof; networkId: NetworkId }) {
-  const base = getNetwork("base");
+  const payment = paymentOf(proof, networkId);
   return (
     <TableRow className="border-border">
       <TableCell className="whitespace-nowrap text-llx-mono">
         {formatPaidAt(proof.paidAt)}
       </TableCell>
       <TableCell>
+        <ChainChip payment={payment} />
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className="font-mono text-sm text-muted-foreground" title={payment.payer ?? "payer not resolved"}>
+          {payment.payer ? (
+            <a
+              href={explorerAddressUrl(payment.explorer, payment.payer)}
+              target="_blank"
+              rel="noreferrer"
+              className="text-llx-link hover:text-foreground"
+            >
+              {shortenAddress(payment.payer)}
+            </a>
+          ) : (
+            "—"
+          )}
+        </span>
+        <span className="px-1 text-muted-foreground">→</span>
         <a
-          href={explorerAddressUrl(base.explorer, proof.payee)}
+          href={explorerAddressUrl(payment.explorer, proof.payee)}
           target="_blank"
           rel="noreferrer"
           className="font-mono text-sm text-llx-link hover:text-foreground"
@@ -265,11 +293,13 @@ function ProofRow({ proof, networkId }: { proof: LedgerProof; networkId: Network
       </TableCell>
       <TableCell className="text-right font-mono text-foreground">
         {formatUsdc(proof.amountUSDC)}{" "}
-        <span className="text-muted-foreground">USDC</span>
+        <span className="text-muted-foreground">{payment.tokenSymbol}</span>
       </TableCell>
       <TableCell className="max-w-xs text-llx-mono" title={proof.memo}>
         <span className="inline-flex max-w-full items-center gap-2">
-          <span className="truncate">{proof.memo || "—"}</span>
+          <a href={`/proofs/${proof.refId}?network=${networkId}`} className="truncate hover:text-foreground">
+            {payment.note || "—"}
+          </a>
           {isSelfTestMemo(proof.memo) ? (
             <Badge className="shrink-0 border-llx-selftest-border bg-transparent text-llx-selftest-text">
               {selfTestBadgeLabel(networkId)}
@@ -285,27 +315,38 @@ function ProofRow({ proof, networkId }: { proof: LedgerProof; networkId: Network
 }
 
 function ProofCard({ proof, networkId }: { proof: LedgerProof; networkId: NetworkId }) {
-  const base = getNetwork("base");
+  const payment = paymentOf(proof, networkId);
   return (
     <Card className="border-border bg-card/80">
       <CardContent className="space-y-3 pt-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground">{formatPaidAt(proof.paidAt)}</p>
-            <p className="font-mono text-lg text-foreground">{formatUsdc(proof.amountUSDC)} USDC</p>
+            <p className="font-mono text-lg text-foreground">
+              {formatUsdc(proof.amountUSDC)} {payment.tokenSymbol}
+            </p>
           </div>
+          <ChainChip payment={payment} />
         </div>
-        <a
-          href={explorerAddressUrl(base.explorer, proof.payee)}
-          target="_blank"
-          rel="noreferrer"
-          className="font-mono text-sm text-llx-link hover:text-foreground"
-          title={proof.payee}
-        >
-          {shortenAddress(proof.payee)}
-        </a>
+        <p className="font-mono text-sm">
+          <span className="text-muted-foreground">
+            {payment.payer ? shortenAddress(payment.payer) : "—"}
+          </span>
+          <span className="px-1 text-muted-foreground">→</span>
+          <a
+            href={explorerAddressUrl(payment.explorer, proof.payee)}
+            target="_blank"
+            rel="noreferrer"
+            className="text-llx-link hover:text-foreground"
+            title={proof.payee}
+          >
+            {shortenAddress(proof.payee)}
+          </a>
+        </p>
         <p className="flex flex-wrap items-center gap-2 text-sm text-llx-mono">
-          <span>{proof.memo || "No memo"}</span>
+          <a href={`/proofs/${proof.refId}?network=${networkId}`} className="hover:text-foreground">
+            {payment.note || "No memo"}
+          </a>
           {isSelfTestMemo(proof.memo) ? (
             <Badge className="border-llx-selftest-border bg-transparent text-llx-selftest-text">
               {selfTestBadgeLabel(networkId)}

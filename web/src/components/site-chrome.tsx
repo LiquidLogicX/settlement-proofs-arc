@@ -33,7 +33,7 @@ export function SiteChrome({
                 className="h-10 w-10 rounded-full object-cover"
               />
               <p className="text-xs tracking-[0.35em] text-llx-label uppercase">
-                Settlement proofs · Arc · Base · Tempo
+                Settlement proofs · Arc · Tempo · Base
               </p>
             </div>
             <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1 text-sm">
@@ -75,8 +75,8 @@ export function SiteChrome({
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between sm:px-6 lg:px-8">
           <span>
             Read-only · networks Arc ({getNetwork("arc").eip155}) · Base (
-            {getNetwork("base").eip155}) · Tempo ({getNetwork("tempo").eip155}) · Base payment →
-            Arc/Tempo notarization · public srcTxHash
+            {getNetwork("base").eip155}) · Tempo ({getNetwork("tempo").eip155}) · Base USDC → Arc
+            proof · Tempo stablecoin → Tempo proof · public srcTxHash
           </span>
           <span>MIT License</span>
         </div>

@@ -61,6 +61,10 @@ describe("programmatic verify uses Arc/Base RPC only — no explorer HTTP API", 
     assert.match(code, /createPublicClient/);
     assert.match(code, /readContract/);
     assert.equal(/explorer\.arc\.io\/api/i.test(code), false);
-    assert.match(proofs, /rpc\.mainnet\.arc\.io|arcRpcUrl|NEXT_PUBLIC_ARC_RPC/);
+    // Since the multi-network verifier, RPC URLs live in lib/config.ts (Arc + Tempo).
+    const config = await fs.readFile(path.join(webRoot, "lib", "config.ts"), "utf8");
+    assert.match(config, /rpc\.mainnet\.arc\.io|NEXT_PUBLIC_ARC_RPC/);
+    assert.match(config, /rpc\.moderato\.tempo\.xyz|NEXT_PUBLIC_TEMPO_RPC/);
+    assert.match(code, /rpcUrl/);
   });
 });

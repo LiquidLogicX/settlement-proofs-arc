@@ -15,6 +15,12 @@ export type NetworkDefinition = {
   explorer: string;
   /** JSON-RPC for registry reads. Payment networks omit this. */
   rpcUrl?: string;
+  /** JSON-RPC used to re-check the payment transaction (payer, token, amount). */
+  paymentRpcUrl: string;
+  /** First block worth scanning for PaymentRecorded logs (registry deploy block). */
+  logsFromBlock?: bigint;
+  /** Max eth_getLogs block span the public RPC accepts (minus margin). */
+  logChunk: bigint;
   /** SettlementProofs address when this network hosts a registry. */
   settlementProofsAddress: Address | null;
   /** eip155 chain reference string. */
@@ -47,7 +53,13 @@ function parseAddress(raw: string | undefined): Address | null {
   }
 }
 
-export const NETWORK_IDS: NetworkId[] = ["arc", "base", "tempo"];
+/** Selector order: registries first (Arc, Tempo), then the Base payment rail. */
+export const NETWORK_IDS: NetworkId[] = ["arc", "tempo", "base"];
+
+/** Tempo Moderato SettlementProofs v2 (2026-10-05): Tempo payment → Tempo proof. */
+export const TEMPO_MODERATO_REGISTRY = "0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b";
+/** Deploy block of TEMPO_MODERATO_REGISTRY (log scans start here). */
+export const TEMPO_MODERATO_REGISTRY_FROM_BLOCK = "38311217";
 
 export function isNetworkId(value: string | null | undefined): value is NetworkId {
   return value === "arc" || value === "base" || value === "tempo";
@@ -63,10 +75,13 @@ export function parseNetworkId(
 export function getPublicConfig(): PublicConfig {
   const arcAddress = parseAddress(process.env.NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS);
   const tempoAddress = parseAddress(
-    process.env.NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS ??
-      // Moderato testnet deploy (2026-09-23) — SettlementProofs + RECORDER_ROLE
-      "0x35d7ec9B87A173774F18182c087bE3296efCce51",
+    process.env.NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS?.trim() || TEMPO_MODERATO_REGISTRY,
   );
+  const tempoFromBlockRaw =
+    process.env.NEXT_PUBLIC_TEMPO_REGISTRY_FROM_BLOCK?.trim() ||
+    (tempoAddress === TEMPO_MODERATO_REGISTRY ? TEMPO_MODERATO_REGISTRY_FROM_BLOCK : "");
+  const tempoFromBlock = /^\d+$/.test(tempoFromBlockRaw) ? BigInt(tempoFromBlockRaw) : undefined;
+  const baseRpcUrl = process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || "https://mainnet.base.org";
 
   const arcRpcUrl =
     process.env.NEXT_PUBLIC_ARC_RPC_URL?.trim() || "https://rpc.mainnet.arc.io";
@@ -93,6 +108,8 @@ export function getPublicConfig(): PublicConfig {
       chainId: arcChainId,
       explorer: arcExplorer,
       rpcUrl: arcRpcUrl,
+      paymentRpcUrl: baseRpcUrl,
+      logChunk: BigInt(9_000),
       settlementProofsAddress: arcAddress,
       eip155: `eip155:${arcChainId}`,
       blurb: "Notarization registry. Payment stays on Base; proofs are append-only on Arc.",
@@ -104,9 +121,11 @@ export function getPublicConfig(): PublicConfig {
       role: "payment",
       chainId: 8453,
       explorer: baseExplorer,
+      paymentRpcUrl: baseRpcUrl,
+      logChunk: BigInt(9_000),
       settlementProofsAddress: null,
       eip155: "eip155:8453",
-      blurb: "USDC payment rail. srcTxHash on each proof is a Base payment transaction.",
+      blurb: "USDC payment rail for the Arc registry. srcTxHash on each Arc proof is a Base payment transaction.",
     },
     tempo: {
       id: "tempo",
@@ -116,10 +135,14 @@ export function getPublicConfig(): PublicConfig {
       chainId: tempoChainId,
       explorer: tempoExplorer,
       rpcUrl: tempoRpcUrl,
+      paymentRpcUrl: tempoRpcUrl,
+      logsFromBlock: tempoFromBlock,
+      // Tempo public RPC caps eth_getLogs at 100_000 blocks.
+      logChunk: BigInt(90_000),
       settlementProofsAddress: tempoAddress,
       eip155: `eip155:${tempoChainId}`,
       blurb:
-        "Tempo Moderato testnet registry (same SettlementProofs ABI). Fees paid in pathUSD.",
+        "Tempo Moderato testnet: the stablecoin payment and its proof both live on Tempo (TIP-20 pathUSD / AlphaUSD / BetaUSD / ThetaUSD). Same SettlementProofs contract as Arc.",
     },
   };
 

@@ -23,6 +23,8 @@ export type BaseVerification = {
   usdcTransferMatched: true;
   /** Matched Transfer value in 6-decimal ERC-20 units. */
   amountUSDC: Erc20UsdcAmount;
+  /** `from` of the matched USDC Transfer (the payer). */
+  payer: Address | null;
 };
 
 export function createBaseClient(rpcUrl: string) {
@@ -99,6 +101,7 @@ export async function verifyBasePayment(args: {
     status: "success",
     usdcTransferMatched: true,
     amountUSDC,
+    payer: match.payer ?? null,
   };
 }
 
@@ -107,7 +110,7 @@ function matchUsdcTransfer(
   payee: Address,
   amountUSDC: Erc20UsdcAmount,
   usdcAddress: Address,
-): { matched: boolean; reason: string } {
+): { matched: boolean; reason: string; payer?: Address } {
   const usdcLogs = logs.filter((log) => isAddressEqual(log.address, usdcAddress));
   if (usdcLogs.length === 0) {
     return { matched: false, reason: `no Transfer logs from Base USDC ${usdcAddress}` };
@@ -126,7 +129,11 @@ function matchUsdcTransfer(
       const to = getAddress(decoded.args.to as Address);
       const value = decoded.args.value as bigint;
       if (isAddressEqual(to, payee) && value === (amountUSDC as bigint)) {
-        return { matched: true, reason: "matched" };
+        return {
+          matched: true,
+          reason: "matched",
+          payer: getAddress(decoded.args.from as Address),
+        };
       }
     } catch {
       // keep scanning
