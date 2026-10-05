@@ -42,7 +42,7 @@ https://proofs.liquidlogicx.com/?network=tempo
 
 https://github.com/LiquidLogicX/settlement-proofs-arc (public, MIT)
 
-Tempo work: [PR #10](https://github.com/LiquidLogicX/settlement-proofs-arc/pull/10). Key paths: `recorder/src/tempo.ts`, `recorder/src/rails.ts`, `web/src/lib/payments.ts`, `docs/tempo-testnet.md`.
+Tempo work: [PR #10](https://github.com/LiquidLogicX/settlement-proofs-arc/pull/10) (merged 2026-10-05 PT). Key paths: `recorder/src/tempo.ts`, `recorder/src/rails.ts`, `web/src/lib/payments.ts`, `docs/tempo-testnet.md`.
 
 ## Contract addresses
 
@@ -115,6 +115,45 @@ Pricing is a flat USDC fee per proof, with no accounts or subscriptions. Verific
 ## Weekly update videos (optional)
 
 [MILES: links, if recorded]. Suggested 1-min topics: (1) Tempo payment → proof working on testnet; (2) verifier chain selector + payment re-check; (3) final demo + what's next (Tempo mainnet).
+
+---
+
+## Media and code (Colosseum form tab — 4 fields)
+
+Paste these into the portal's **Media and code** tab. Claims say **Tempo testnet** until Tempo mainnet is live and wired ([`../docs/tempo-mainnet-prep.md`](../docs/tempo-mainnet-prep.md)).
+
+### 1. Demo video (product / technical, ≤ 3 min)
+
+**Paste:** [MILES: unlisted YouTube or Loom URL after recording]
+
+**Source script:** [`demo-script.md`](demo-script.md) (phone screen recording of `proofs.liquidlogicx.com/?network=tempo`).
+
+**Recording checklist:** Do Not Disturb on; brightness up; confirm Tempo ledger shows **3 proofs** and **~262.92 USD** total (if you see 1 synthetic proof, Vercel is still on legacy — set `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` to v2 and redeploy); mic on; trim under 3:00.
+
+### 2. Repository (code)
+
+**Paste:** `https://github.com/LiquidLogicX/settlement-proofs-arc`
+
+Public, MIT. Tempo rail + verifier: `recorder/src/tempo.ts`, `recorder/src/rails.ts`, `web/src/lib/payments.ts`, `docs/tempo-testnet.md`.
+
+### 3. Live links (product)
+
+**Paste (primary):** `https://proofs.liquidlogicx.com/?network=tempo`
+
+Optional extras (if the form allows multiple / a notes field):
+
+- Tempo Moderato registry: `https://explore.testnet.tempo.xyz/address/0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b`
+- Example Tempo proof: `https://proofs.liquidlogicx.com/proofs/0x3a667de23cf4dce787f79b2e14457964ff2b1935f949c3a294793ff389eef41f?network=tempo`
+- Arc mainnet ledger (same product, Base USDC rail): `https://proofs.liquidlogicx.com/?network=arc`
+
+### 4. Presentation (pitch video, 2–3 min)
+
+**Paste:** [MILES: unlisted YouTube or Loom URL after recording]
+
+**Source script:** [`pitch.md`](pitch.md#presentation-video-script-target-215-limit-300).
+
+Product-focused: receipts for stablecoin payments, Tempo testnet integration, public verifier. No $LLX / token-price talk. No live privacy/FHE claims.
+
 
 ---
 
