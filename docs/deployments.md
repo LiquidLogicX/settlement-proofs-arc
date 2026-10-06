@@ -8,7 +8,7 @@ Public addresses the verifier and recorder may point at. **Verifier production m
 | --- | --- | --- | --- | --- |
 | Arc mainnet (`5042`) | registry | SettlementProofs | [`0x1de52cbc4490a7873ef007e51cb91a5b374facb1`](https://explorer.arc.io/address/0x1de52cbc4490a7873ef007e51cb91a5b374facb1) | Live. USDC payments verified on Base. |
 | Tempo Moderato (`42431`) | registry | SettlementProofs **v2** | [`0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b`](https://explore.testnet.tempo.xyz/address/0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b) | **Current.** Deploy block `38311217`. Three real TIP-20 proofs. |
-| Tempo mainnet (`4217`) | registry | — | *not deployed* | See [`tempo-mainnet-prep.md`](tempo-mainnet-prep.md). No broadcast without Miles OK. |
+| Tempo mainnet (`4217`) | registry | SettlementProofs | [`0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`](https://explore.tempo.xyz/address/0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A) | **Deployed 2026-10-05 PT**, deploy block `42806697`, source exact_match on `contracts.tempo.xyz`. Admin `0x02326e16…6c4e` (Miles), recorder `0xea80a0db…6dac`; deployer holds no role. **Not wired** to the verifier or recorder yet. See [`tempo-mainnet-prep.md`](tempo-mainnet-prep.md). |
 
 ### Verifier (Vercel project `settlement-proofs-arc`)
 

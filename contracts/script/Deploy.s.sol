@@ -30,9 +30,8 @@ import {SettlementProofs} from "../src/SettlementProofs.sol";
 ///     --broadcast --slow \
 ///     --private-key $PRIVATE_KEY
 ///
-/// Tempo Moderato testnet (chainId 42431):
-/// Tempo mainnet (chainId 4217) — PREP ONLY, see docs/tempo-mainnet-prep.md.
-///   Do NOT broadcast to https://rpc.tempo.xyz without Miles OK + Miles admin wallet.
+/// Tempo mainnet (chainId 4217) — DEPLOYED 2026-10-05 PT at 0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A
+///   via script/DeployTempoMainnetHandoff.s.sol (admin handoff). Do not use this script on 4217.
 /// Tempo Moderato testnet (chainId 42431) — current hackathon target:
 ///   forge script script/Deploy.s.sol:DeploySettlementProofs --sig "run()" \
 ///     --rpc-url https://rpc.moderato.tempo.xyz \
