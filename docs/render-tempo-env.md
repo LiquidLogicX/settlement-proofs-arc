@@ -35,7 +35,7 @@ Without both, the Tempo rail stays disabled; Arc continues to work. The three de
 
 | Env var name | Why |
 | --- | --- |
-| `TEMPO_ALLOW_MAINNET` | Must stay unset/`false`. If `true`, the process may talk to Tempo mainnet chain `4217`. Mainnet deploy is a separate Miles-approved step ([`tempo-mainnet-prep.md`](tempo-mainnet-prep.md)). |
+| `TEMPO_ALLOW_MAINNET` | Must stay unset/`false` until Miles switches the recorder to mainnet. If `true`, the process may talk to Tempo mainnet chain `4217`. The mainnet registry is deployed (`0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`); the full mainnet env set is in [`tempo-mainnet-prep.md`](tempo-mainnet-prep.md#proposed-switch-over-not-done). |
 
 ## Already present (Arc rail — leave alone)
 
