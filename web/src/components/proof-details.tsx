@@ -47,7 +47,7 @@ export function PaymentCheckBadge({ payment }: { payment: PaymentInfo }) {
 export function ChainChip({ payment }: { payment: PaymentInfo }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs whitespace-nowrap text-foreground">
-      <span className={payment.network === "tempo" ? "text-llx-link" : "text-muted-foreground"}>
+      <span className={payment.network !== "base" ? "text-llx-link" : "text-muted-foreground"}>
         {payment.label}
       </span>
       <span className="text-muted-foreground">·</span>

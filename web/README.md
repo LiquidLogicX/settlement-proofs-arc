@@ -21,4 +21,4 @@ Rebuild after changing public env vars — they are inlined at build time.
 
 ## Networks
 
-The public site network switcher exposes **Arc** (registry), **Base** (payment), and **Tempo** Moderato testnet (registry). Set `NEXT_PUBLIC_TEMPO_*` vars (see `.env.example`). Lookup/ledger APIs accept `?network=arc|base|tempo`.
+The public site network switcher exposes **Arc** (registry), **Tempo mainnet** (registry, `?network=tempo-mainnet`), **Tempo testnet** (Moderato registry, `?network=tempo`, the 3 demo proofs), and **Base** (payment). `NEXT_PUBLIC_TEMPO_*` configures the testnet tab; `NEXT_PUBLIC_TEMPO_MAINNET_*` optionally overrides the hardcoded mainnet defaults (see `.env.example`). `NEXT_PUBLIC_TEMPO_DEFAULT_NETWORK` (`auto` | `tempo-mainnet` | `tempo`, default `auto`) picks which Tempo tab is listed first: `auto` = mainnet once its registry has at least one proof, else testnet. `?network=tempo` always means testnet, so existing links keep working. Lookup/ledger APIs accept `?network=arc|base|tempo|tempo-mainnet`.

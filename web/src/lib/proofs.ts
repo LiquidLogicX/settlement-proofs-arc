@@ -12,6 +12,7 @@ import { mapLimit, resolvePayment, type PaymentInfo } from "./payments";
 import {
   getNetwork,
   getPublicConfig,
+  isTempoNetwork,
   parseNetworkId,
   type NetworkDefinition,
   type NetworkId,
@@ -159,7 +160,7 @@ export function isTempoSyntheticSelfTest(args: {
   memo?: string;
   refId?: string;
 }): boolean {
-  if (args.networkId !== "tempo") return false;
+  if (!isTempoNetwork(args.networkId)) return false;
   if (args.selfTest) return true;
   if (args.memo !== undefined && isSelfTestMemo(args.memo)) return true;
   if (args.refId && args.refId.toLowerCase() === TEMPO_SYNTHETIC_SELF_TEST_REF_ID) return true;
@@ -168,7 +169,7 @@ export function isTempoSyntheticSelfTest(args: {
 
 /** Badge copy for self-test / synthetic proofs. Arc stays "Self-test"; Tempo is explicit. */
 export function selfTestBadgeLabel(networkId: NetworkId): string {
-  return networkId === "tempo" ? "Synthetic demo" : "Self-test";
+  return isTempoNetwork(networkId) ? "Synthetic demo" : "Self-test";
 }
 
 /** Accept 0x-prefixed or bare 32-byte hex (refId or tx hash). */
@@ -186,7 +187,7 @@ function registryChain(network: NetworkDefinition) {
     throw new Error(`${network.label} is not a registry network.`);
   }
   const native =
-    network.id === "tempo"
+    isTempoNetwork(network.id)
       ? { name: "USD", symbol: "USD", decimals: 18 }
       : { name: "USD Coin", symbol: "USDC", decimals: 18 };
   return defineChain({
@@ -207,7 +208,7 @@ function requireRegistryContext(networkId: NetworkId = "arc"): RegistryContext {
   const network = getNetwork(networkId);
   if (network.role !== "registry" || !network.rpcUrl) {
     throw new Error(
-      `${network.label} is the payment rail — pick Arc or Tempo to read settlement proofs.`,
+      `${network.label} is the payment rail — pick Arc or a Tempo tab to read settlement proofs.`,
     );
   }
   if (!network.settlementProofsAddress) {
@@ -412,6 +413,12 @@ async function readProofByRef(
       : ((await findProofTxNear(client, address, refId, Number(raw.recordedAt), network)) ??
         (await findProofTxByRef(client, address, refId, network)));
   return toLedgerProof(raw, tx);
+}
+
+/** proofCount() on a registry (cheap single eth_call; used to pick the default Tempo tab). */
+export async function fetchProofCount(networkId: NetworkId): Promise<bigint> {
+  const { client, address } = requireRegistryContext(networkId);
+  return client.readContract({ address, abi: settlementProofsAbi, functionName: "proofCount" });
 }
 
 /** Programmatic ledger: registry JSON-RPC only (eth_call / getLogs). Never explorer HTTP APIs. */

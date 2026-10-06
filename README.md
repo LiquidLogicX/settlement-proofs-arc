@@ -133,11 +133,11 @@ Real keys never go in git; placeholders live in `**/.env.example`.
 - **Recorder, Tempo rail:** `TEMPO_SETTLEMENT_PROOFS_ADDRESS`, `TEMPO_RECORDER_PRIVATE_KEY` (testnet key, pathUSD for fees, must differ from the Arc key), optional `TEMPO_RPC_URL`, `TEMPO_ALLOWED_TOKENS`, `TEMPO_MIN_RECORDER_FEE_BALANCE`. Tempo mainnet (chain 4217) is refused unless `TEMPO_ALLOW_MAINNET=true`.
 - **Recorder, Arc rail:** `BASE_RPC_URL`, `ARC_RPC_URL`, `SETTLEMENT_PROOFS_ADDRESS`, `SETTLEMENT_RECORDER_PRIVATE_KEY`, `MIN_CONFIRMATIONS` (default 12). Unchanged; see [`docs/arc-operations.md`](docs/arc-operations.md).
 - **Both:** `RECORDER_API_KEY`, optional `PUBLIC_VERIFIER_URL`.
-- **Web:** `NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS` (Arc), `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` (defaults to the Tempo registry above), optional `NEXT_PUBLIC_TEMPO_REGISTRY_FROM_BLOCK`, `NEXT_PUBLIC_BASE_RPC_URL`.
+- **Web:** `NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS` (Arc), `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` (Tempo testnet tab; defaults to the Moderato registry above), optional `NEXT_PUBLIC_TEMPO_REGISTRY_FROM_BLOCK`, `NEXT_PUBLIC_BASE_RPC_URL`. Tempo mainnet tab: optional `NEXT_PUBLIC_TEMPO_MAINNET_*` overrides (defaults to the live mainnet registry) and `NEXT_PUBLIC_TEMPO_DEFAULT_NETWORK` (see `web/.env.example`).
 
 ## Roadmap
 
-- Tempo mainnet registry, once an LLX-owned admin wallet is funded (Tempo mainnet has been live since March 2026).
+- Tempo mainnet: registry deployed and source-verified (`0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`, chain 4217) with an LLX-owned admin wallet. Next: switch the recorder to mainnet and record the first real proof ([`docs/render-tempo-env.md`](docs/render-tempo-env.md#tempo-mainnet-switch-over)).
 - Paid proof API for Tempo payments (same pay-per-proof model as the Base endpoint), including Tempo's Machine Payments Protocol for agent clients.
 - Batch proofs and CSV export for month-end close.
 - Superseding records: an append-only correction that points at an earlier proof (a wrong proof is never edited).

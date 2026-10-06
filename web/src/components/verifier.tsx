@@ -13,6 +13,7 @@ import {
   explorerAddressUrl,
   formatUsdc,
   getNetwork,
+  isTempoNetwork,
   type NetworkId,
 } from "@/lib/config";
 import {
@@ -154,7 +155,7 @@ export function Verifier({
           <p className="text-sm text-muted-foreground">
             Paste a settlement ID (<code className="text-llx-link">refId</code>), a{" "}
             {network.shortLabel} proof transaction hash, or the{" "}
-            {networkId === "tempo" ? "Tempo" : "Base"} payment transaction hash (
+            {isTempoNetwork(networkId) ? "Tempo" : "Base"} payment transaction hash (
             <code className="text-llx-link">srcTxHash</code>). Data comes from public JSON-RPC
             only — not a privacy product.
           </p>

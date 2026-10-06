@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { NetworkSwitcher } from "@/components/network-switcher";
-import { getNetwork, type NetworkId } from "@/lib/config";
+import { getNetwork, isTempoNetwork, tempoTabOrder, type NetworkId } from "@/lib/config";
+import { resolveDefaultTempoNetwork } from "@/lib/tempo-default";
 
-export function SiteChrome({
+export async function SiteChrome({
   children,
   active,
   title,
@@ -18,6 +19,9 @@ export function SiteChrome({
   network: NetworkId;
 }) {
   const selected = getNetwork(network);
+  const { defaultTempo, mainnetProofCount } = await resolveDefaultTempoNetwork();
+  const order = tempoTabOrder(defaultTempo);
+  const showMainnetHint = network === "tempo" && defaultTempo === "tempo-mainnet";
 
   return (
     <div className="relative flex flex-1 flex-col bg-background">
@@ -49,13 +53,26 @@ export function SiteChrome({
                 rel="noreferrer"
                 className="rounded-full px-3 py-1.5 text-white transition hover:bg-muted hover:text-white"
               >
-                {selected.shortLabel} explorer
+                {isTempoNetwork(selected.id) ? "Tempo" : selected.shortLabel} explorer
               </a>
             </nav>
           </div>
           <Suspense fallback={null}>
-            <NetworkSwitcher active={network} />
+            <NetworkSwitcher active={network} order={order} />
           </Suspense>
+          {showMainnetHint ? (
+            <p className="text-sm text-muted-foreground">
+              Viewing Tempo testnet demo proofs. Tempo mainnet is live
+              {mainnetProofCount !== null
+                ? ` with ${mainnetProofCount.toString()} proof${mainnetProofCount === BigInt(1) ? "" : "s"}`
+                : ""}
+              :{" "}
+              <Link href="/?network=tempo-mainnet" className="text-llx-link hover:text-foreground">
+                open the Tempo mainnet tab
+              </Link>
+              .
+            </p>
+          ) : null}
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -75,7 +92,8 @@ export function SiteChrome({
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between sm:px-6 lg:px-8">
           <span>
             Read-only · networks Arc ({getNetwork("arc").eip155}) · Base (
-            {getNetwork("base").eip155}) · Tempo ({getNetwork("tempo").eip155}) · Base USDC → Arc
+            {getNetwork("base").eip155}) · Tempo mainnet ({getNetwork("tempo-mainnet").eip155}) · Tempo
+            testnet ({getNetwork("tempo").eip155}) · Base USDC → Arc
             proof · Tempo stablecoin → Tempo proof · public srcTxHash
           </span>
           <span>MIT License</span>

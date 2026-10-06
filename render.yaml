@@ -44,4 +44,5 @@ services:
         sync: false
       - key: PUBLIC_VERIFIER_URL
         sync: false
-      # Do NOT set TEMPO_ALLOW_MAINNET until Miles approves Tempo mainnet (docs/tempo-mainnet-prep.md).
+      # TEMPO_ALLOW_MAINNET: set to "true" in the Render UI only together with the full mainnet set in
+      # docs/render-tempo-env.md#tempo-mainnet-switch-over (Miles approved 2026-10-05; Miles pastes values).

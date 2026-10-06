@@ -19,17 +19,32 @@ import {
   http,
   isAddressEqual,
 } from "viem";
-import { getNetwork, type NetworkId } from "./config";
+import { getNetwork, isTempoNetwork, type NetworkId, type TempoNetworkId } from "./config";
 import { parseProofMemo } from "./proof-memo";
 
 export const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
 const TIP20_PREFIX = "0x20c000000000000000000000";
-const TEMPO_CHAIN_IDS = new Set([42431, 4217]);
+const TEMPO_CHAIN_IDS = [42431, 4217];
+
+function tempoChainIds(): Set<number> {
+  return new Set([...TEMPO_CHAIN_IDS, getNetwork("tempo").chainId, getNetwork("tempo-mainnet").chainId]);
+}
+
+/** Map a tagged payment chain id to a Tempo tab; falls back to the registry's own Tempo network. */
+export function tempoNetworkForChain(chainId: number, registry: TempoNetworkId): TempoNetworkId {
+  if (chainId === getNetwork(registry).chainId) return registry;
+  if (chainId === getNetwork("tempo-mainnet").chainId) return "tempo-mainnet";
+  if (chainId === getNetwork("tempo").chainId) return "tempo";
+  return registry;
+}
+
+/** Where a payment (srcTxHash) lives: Base USDC, or a TIP-20 stablecoin on one of the Tempo networks. */
+export type PaymentNetwork = "base" | TempoNetworkId;
 
 export type PaymentCheck = "matched" | "mismatch" | "unavailable" | "synthetic";
 
 export type PaymentInfo = {
-  network: "base" | "tempo";
+  network: PaymentNetwork;
   chainId: number;
   label: string;
   explorer: string;
@@ -60,10 +75,13 @@ export function resolvePaymentSource(
 ): Omit<PaymentInfo, "payer" | "token" | "check"> {
   const parsed = parseProofMemo(memo);
   const tagged = parsed.paymentChainId;
-  const isTempo = tagged !== null && TEMPO_CHAIN_IDS.has(tagged) && registry === "tempo";
-  const net = getNetwork(isTempo ? "tempo" : "base");
+  const isTempo = tagged !== null && isTempoNetwork(registry) && tempoChainIds().has(tagged);
+  // A Tempo proof's payment lives on the Tempo network whose chain id is in the memo tag
+  // (normally the same network as the registry).
+  const network: PaymentNetwork = isTempo ? tempoNetworkForChain(tagged as number, registry as TempoNetworkId) : "base";
+  const net = getNetwork(network);
   return {
-    network: isTempo ? "tempo" : "base",
+    network,
     chainId: isTempo ? (tagged as number) : 8453,
     label: net.label,
     explorer: net.explorer,
@@ -77,7 +95,7 @@ type Log = { address: Address; topics: readonly Hex[]; data: Hex };
 /** Pure: find Transfer(to = payee, value = amount) from an acceptable token. */
 export function findPaymentTransfer(
   logs: readonly Log[],
-  network: "base" | "tempo",
+  network: PaymentNetwork,
   payee: string,
   amount: bigint,
 ): { payer: Address; token: Address } | null {
@@ -101,7 +119,7 @@ export function findPaymentTransfer(
 }
 
 const clients = new Map<string, ReturnType<typeof createPublicClient>>();
-function paymentClient(network: "base" | "tempo") {
+function paymentClient(network: PaymentNetwork) {
   const def = getNetwork(network);
   const key = `${network}:${def.paymentRpcUrl}`;
   let client = clients.get(key);

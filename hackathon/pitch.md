@@ -22,6 +22,7 @@ Stablecoins move money in seconds, but proving that a payment happened is still 
 Live today:
 - **Tempo** (Moderato testnet): TIP-20 payment on Tempo → proof on Tempo. Built during the hackathon; 3 real proofs.
 - **Arc** (mainnet): USDC payment on Base → proof on Arc. 2 mainnet proofs.
+- **Tempo mainnet:** the `SettlementProofs` registry is deployed and source-verified (`0x9940a8fE…DfE6A`, chain 4217), with the admin role on an LLX-owned wallet. First mainnet proofs are next.
 
 ## 3. Why Tempo
 
@@ -29,7 +30,7 @@ Tempo is built for payments, and a settlement proof is payment paperwork. The fi
 
 - **Memos built in.** TIP-20 `transferWithMemo` carries a 32-byte reference (an invoice number, a payout ID) in the payment itself. Our recorder reads it and keeps it in the proof, so reconciliation needs no side channel.
 - **Deterministic, sub-second finality.** One confirmation is final, so a proof can be written seconds after the payment with no reorg window. (On Base we wait 12 confirmations.)
-- **Stablecoin-native fees.** The recorder pays its fees in pathUSD. There's no gas token to manage, and our cost per proof is a stable, predictable number.
+- **Stablecoin-native fees.** The recorder pays its fees in a stablecoin (pathUSD on testnet, USDC.e on mainnet). There's no gas token to manage, and our cost per proof is a stable, predictable number.
 - **Payment and proof on one chain.** On Tempo, the payment and its notarization sit side by side, readable over one RPC. That makes the independent check cheap and simple.
 - **Multiple stablecoins.** One registry handles pathUSD, AlphaUSD, BetaUSD, ThetaUSD (allowlisted), and every proof shows which token moved.
 
@@ -38,7 +39,7 @@ Tempo is built for payments, and a settlement proof is payment paperwork. The fi
 - **Live mainnet proofs on Arc:** 2 real USDC payments on Base, notarized on Arc mainnet (`0x1de52cbc…4facb1`), with the public verifier live at proofs.liquidlogicx.com.
 - **Live testnet proofs on Tempo:** 3 real TIP-20 payments (AlphaUSD, pathUSD, BetaUSD) proven through the production recorder code path on Tempo Moderato (`0x2ec4CF47…2c0b`).
 - **Paid x402 endpoint on Base:** `audit.liquidlogicx.com/api/prove`. An AI agent pays per call in USDC over x402 and gets back a proof and a public verify link. It sits alongside our other paid agent endpoints (`/api/audit`, `/api/allowance`). [MILES: add the number of paid calls or unique payers to date, if any.]
-- **Open source:** the contracts, recorder, and verifier are MIT licensed in a public repo, with 14 contract tests and 59 recorder tests.
+- **Open source:** the contracts, recorder, and verifier are MIT licensed in a public repo, with 14 contract tests and 62 recorder tests.
 
 ## 5. Business model
 
@@ -51,8 +52,8 @@ Tempo is built for payments, and a settlement proof is payment paperwork. The fi
 
 | When | What |
 | --- | --- |
-| Now (hackathon) | Tempo rail end to end on Moderato: recorder, verifier, chain selector, payment re-check, 3 live proofs |
-| Next 30 days | Tempo **mainnet** registry (Tempo mainnet has been live since March 2026) with an LLX-owned admin wallet; paid proof endpoint for Tempo payments |
+| Now (hackathon) | Tempo rail end to end on Moderato: recorder, verifier, chain selector, payment re-check, 3 live proofs. Registry deployed and source-verified on Tempo **mainnet** with an LLX-owned admin wallet |
+| Next 30 days | First real proofs on Tempo mainnet; paid proof endpoint for Tempo payments |
 | Next 90 days | Machine Payments Protocol support so agents on Tempo can buy proofs natively; batch proofs and CSV export for month-end close; webhooks |
 | Later | Append-only corrections (a new proof that supersedes an old one); more stablecoin chains; selective disclosure for payees who need it, once the underlying chains support it. This is roadmap only. Every proof today is fully public, by design. |
 
@@ -70,8 +71,8 @@ Film yourself (selfie camera, landscape) or narrate over the screenshots in `scr
 >
 > **[1:05] Why Tempo.** "Tempo is a payments chain, and this is payments paperwork. Tempo transfers carry a built-in memo, so the invoice number travels with the payment and lands in the proof. Finality is deterministic and fast, so the proof is final seconds after the payment. Fees are in stablecoins, so every proof costs a predictable amount. On Tempo, the payment and the proof live side by side."
 >
-> **[1:30] Traction.** "This is live. We have proofs on Arc mainnet for USDC paid on Base, three real proofs on Tempo's testnet, and a paid x402 endpoint on Base where an agent buys a proof per call."
+> **[1:30] Traction.** "This is live. We have proofs on Arc mainnet for USDC paid on Base, three real proofs on Tempo's testnet, our registry deployed and verified on Tempo mainnet, and a paid x402 endpoint on Base where an agent buys a proof per call."
 >
 > **[1:45] Business.** "We charge a flat fee per proof, paid per call in USDC. No accounts, no subscriptions. Checking a proof is always free. Platforms that need a proof for every payout get volume plans."
 >
-> **[1:58] Ask / roadmap.** "Next, we're bringing the registry to Tempo mainnet and letting agents buy proofs natively on Tempo. If your product moves stablecoins, every payment should come with a receipt anyone can check. That's LLX Settlement Proofs."
+> **[1:58] Ask / roadmap.** "Next, we're recording real payments on Tempo mainnet and letting agents buy proofs natively on Tempo. If your product moves stablecoins, every payment should come with a receipt anyone can check. That's LLX Settlement Proofs."

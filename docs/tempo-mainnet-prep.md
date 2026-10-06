@@ -1,6 +1,6 @@
 # Tempo mainnet — SettlementProofs deploy
 
-**Status: DEPLOYED 2026-10-05 PT (Miles approved the broadcast).** Registry is live on Tempo mainnet with the admin handed off to Miles's wallet. **Not wired yet:** the public verifier and the Render recorder still point at Tempo Moderato testnet. Switching them is a separate Miles decision (see [Proposed switch-over](#proposed-switch-over-not-done)).
+**Status: DEPLOYED 2026-10-05 PT (Miles approved the broadcast).** Registry is live on Tempo mainnet with the admin handed off to Miles's wallet. **Switch-over decided (Miles, 2026-10-05 PT): Option A.** The verifier gets a separate "Tempo mainnet" tab (`?network=tempo-mainnet`) next to "Tempo testnet" (`?network=tempo`, the 3 demo proofs). The Render recorder switch is Miles's step: exact env list in [`render-tempo-env.md`](render-tempo-env.md#tempo-mainnet-switch-over). Until the first real mainnet proof exists, proof claims stay on testnet.
 
 ## Live registry
 
@@ -84,7 +84,7 @@ Sweeping leftover fee token: Tempo reserves `gasLimit × maxFeePerGas` up front 
 
 ## Proposed switch-over (NOT done)
 
-Nothing below has been changed. Miles decides when, and pastes any keys himself.
+Miles chose **Option A** for the verifier (implemented in code: `tempo-mainnet` network entry). The recorder env change below is still Miles's step; he pastes any keys himself. Canonical one-per-line list: [`render-tempo-env.md`](render-tempo-env.md#tempo-mainnet-switch-over).
 
 ### Recorder (Render `arc-settlement-recorder`)
 

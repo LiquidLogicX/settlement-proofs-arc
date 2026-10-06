@@ -18,7 +18,7 @@ Receipts for stablecoin payments that anyone can check: send a payment tx hash, 
 
 ## Description (short paragraph)
 
-LLX Settlement Proofs turns a stablecoin payment into a permanent receipt that anyone can verify. A business, platform, or AI agent posts a payment transaction hash to our API. The recorder reads the receipt from the chain and only writes a proof if it finds a matching stablecoin transfer (right token, right payee, exact amount). The proof goes into an append-only `SettlementProofs` contract with no edit or delete. Our public verifier at proofs.liquidlogicx.com lists every proof with chain, token, payer → payee, amount, payment tx, and proof tx, and re-checks the payment on-chain on its own. On Tempo, the TIP-20 payment and its proof sit on the same chain, and the payer's built-in transfer memo (such as an invoice number) is carried into the proof. It's live on Tempo testnet (3 real proofs) and on Arc mainnet for USDC paid on Base (2 proofs). It's also offered as a paid x402 API on Base.
+LLX Settlement Proofs turns a stablecoin payment into a permanent receipt that anyone can verify. A business, platform, or AI agent posts a payment transaction hash to our API. The recorder reads the receipt from the chain and only writes a proof if it finds a matching stablecoin transfer (right token, right payee, exact amount). The proof goes into an append-only `SettlementProofs` contract with no edit or delete. Our public verifier at proofs.liquidlogicx.com lists every proof with chain, token, payer → payee, amount, payment tx, and proof tx, and re-checks the payment on-chain on its own. On Tempo, the TIP-20 payment and its proof sit on the same chain, and the payer's built-in transfer memo (such as an invoice number) is carried into the proof. It's live on Tempo testnet (3 real proofs) and on Arc mainnet for USDC paid on Base (2 proofs), and the `SettlementProofs` registry is deployed and source-verified on Tempo mainnet. It's also offered as a paid x402 API on Base.
 
 ## Track
 
@@ -27,6 +27,7 @@ Tempo
 ## Blockchains integrated
 
 - **Tempo** (Moderato testnet, chain 42431): TIP-20 payments verified on Tempo; `SettlementProofs` registry deployed on Tempo; fees paid in pathUSD; `transferWithMemo` memos read into proofs.
+- **Tempo** (mainnet, chain 4217): `SettlementProofs` registry deployed and source-verified (Sourcify exact_match), admin handed to an LLX-owned wallet, fees paid in USDC.e. Mainnet proofs are not recorded yet.
 - **Arc** (mainnet, chain 5042): `SettlementProofs` registry for USDC payments made on Base.
 - **Base** (mainnet, chain 8453): USDC payment verification for the Arc rail; paid x402 proof endpoint.
 
@@ -48,6 +49,7 @@ Tempo work: [PR #10](https://github.com/LiquidLogicX/settlement-proofs-arc/pull/
 
 | Network | Contract | Address |
 | --- | --- | --- |
+| Tempo mainnet | SettlementProofs (deployed + source-verified; no proofs yet) | `0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A` |
 | Tempo Moderato | SettlementProofs (v2) | `0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b` |
 | Arc mainnet | SettlementProofs | `0x1de52cbc4490a7873ef007e51cb91a5b374facb1` |
 
@@ -107,6 +109,7 @@ Pricing is a flat USDC fee per proof, with no accounts or subscriptions. Verific
 - **During the window (Oct 5–12, 2026), the Tempo track work in this submission:**
   - the Tempo rail in the recorder (TIP-20 payment verification on Tempo, token allowlist, memo convention, fee-token guard, mainnet safety switch, `POST /v1/tempo/proofs`)
   - the Tempo SettlementProofs v2 deploy and the 3 real Tempo proofs
+  - the Tempo mainnet SettlementProofs deploy (Oct 5, 2026; source-verified, admin handed off to an LLX-owned wallet)
   - the verifier's chain selector, payment re-check, and payer/payee/token display
   - tests
   - this submission pack
@@ -120,7 +123,7 @@ Pricing is a flat USDC fee per proof, with no accounts or subscriptions. Verific
 
 ## Media and code (Colosseum form tab — 4 fields)
 
-Paste these into the portal's **Media and code** tab. Claims say **Tempo testnet** until Tempo mainnet is live and wired ([`../docs/tempo-mainnet-prep.md`](../docs/tempo-mainnet-prep.md)).
+Paste these into the portal's **Media and code** tab. Proof claims say **Tempo testnet** until the first real Tempo mainnet proof is recorded. It is accurate now to say the registry is **deployed and source-verified on Tempo mainnet** ([`../docs/tempo-mainnet-prep.md`](../docs/tempo-mainnet-prep.md)).
 
 ### 1. Demo video (product / technical, ≤ 3 min)
 
@@ -143,6 +146,7 @@ Public, MIT. Tempo rail + verifier: `recorder/src/tempo.ts`, `recorder/src/rails
 Optional extras (if the form allows multiple / a notes field):
 
 - Tempo Moderato registry: `https://explore.testnet.tempo.xyz/address/0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b`
+- Tempo mainnet registry (deployed + source-verified): `https://explore.tempo.xyz/address/0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`
 - Example Tempo proof: `https://proofs.liquidlogicx.com/proofs/0x3a667de23cf4dce787f79b2e14457964ff2b1935f949c3a294793ff389eef41f?network=tempo`
 - Arc mainnet ledger (same product, Base USDC rail): `https://proofs.liquidlogicx.com/?network=arc`
 
@@ -161,7 +165,7 @@ Product-focused: receipts for stablecoin payments, Tempo testnet integration, pu
 
 | Criterion (Colosseum rules / FAQ) | Where we show it |
 | --- | --- |
-| Functionality / code quality | Live verifier; 3 Tempo proofs; 14 contract tests + 59 recorder tests; negative checks (wrong amount, wrong payee, replay) |
+| Functionality / code quality | Live verifier; 3 Tempo proofs; 14 contract tests + 62 recorder tests; negative checks (wrong amount, wrong payee, replay) |
 | Potential impact / market size | Every stablecoin payout, payroll run, and agent API payment needs a receipt |
 | Novelty / insight | Independent on-chain re-check by the verifier; TIP-20 memo carried into the proof; one registry across chains |
 | UX | Paste a payment hash and get a proof; no wallet or login to verify; mobile-ready |

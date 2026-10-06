@@ -1,7 +1,10 @@
 import { type Address, getAddress, isAddress } from "viem";
 
 /** Visible networks on proofs.liquidlogicx.com. */
-export type NetworkId = "arc" | "base" | "tempo";
+export type NetworkId = "arc" | "base" | "tempo" | "tempo-mainnet";
+
+/** Tempo registry tabs. `tempo` stays the Moderato testnet key so existing ?network=tempo links keep working. */
+export type TempoNetworkId = "tempo" | "tempo-mainnet";
 
 export type NetworkRole = "registry" | "payment";
 
@@ -53,8 +56,22 @@ function parseAddress(raw: string | undefined): Address | null {
   }
 }
 
-/** Selector order: registries first (Arc, Tempo), then the Base payment rail. */
-export const NETWORK_IDS: NetworkId[] = ["arc", "tempo", "base"];
+/** Selector order: registries first (Arc, Tempo mainnet, Tempo testnet), then the Base payment rail.
+ *  The two Tempo tabs are re-ordered at render time so the default Tempo tab comes first
+ *  (see tempoTabOrder / lib/tempo-default.ts). */
+export const NETWORK_IDS: NetworkId[] = ["arc", "tempo-mainnet", "tempo", "base"];
+
+export const TEMPO_NETWORK_IDS: TempoNetworkId[] = ["tempo-mainnet", "tempo"];
+
+export function isTempoNetwork(id: string | null | undefined): id is TempoNetworkId {
+  return id === "tempo" || id === "tempo-mainnet";
+}
+
+/** NETWORK_IDS with the default Tempo tab placed first among the Tempo tabs. */
+export function tempoTabOrder(defaultTempo: TempoNetworkId): NetworkId[] {
+  const other: TempoNetworkId = defaultTempo === "tempo" ? "tempo-mainnet" : "tempo";
+  return ["arc", defaultTempo, other, "base"];
+}
 
 /** Tempo Moderato SettlementProofs v2 (2026-10-05): Tempo payment → Tempo proof.
  *  Production default. Legacy v1 (0x35d7…ce51) is superseded and must not be the verifier default
@@ -63,8 +80,16 @@ export const TEMPO_MODERATO_REGISTRY = "0x2ec4CF47e6964b33FEd3718f07885ed44aF52c
 /** Deploy block of TEMPO_MODERATO_REGISTRY (log scans start here). */
 export const TEMPO_MODERATO_REGISTRY_FROM_BLOCK = "38311217";
 
+/** Tempo mainnet SettlementProofs (deployed + Sourcify exact_match 2026-10-05). See docs/tempo-mainnet-prep.md. */
+export const TEMPO_MAINNET_REGISTRY = "0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A";
+/** Deploy block of TEMPO_MAINNET_REGISTRY. */
+export const TEMPO_MAINNET_REGISTRY_FROM_BLOCK = "42806697";
+export const TEMPO_MAINNET_CHAIN_ID = 4217;
+export const TEMPO_MAINNET_RPC = "https://rpc.tempo.xyz";
+export const TEMPO_MAINNET_EXPLORER = "https://explore.tempo.xyz";
+
 export function isNetworkId(value: string | null | undefined): value is NetworkId {
-  return value === "arc" || value === "base" || value === "tempo";
+  return value === "arc" || value === "base" || value === "tempo" || value === "tempo-mainnet";
 }
 
 export function parseNetworkId(
@@ -101,6 +126,25 @@ export function getPublicConfig(): PublicConfig {
   );
   const tempoChainId = Number(process.env.NEXT_PUBLIC_TEMPO_CHAIN_ID ?? "42431");
 
+  // Tempo mainnet: hardcoded defaults, optional NEXT_PUBLIC_TEMPO_MAINNET_* overrides.
+  const tempoMainnetAddress = parseAddress(
+    process.env.NEXT_PUBLIC_TEMPO_MAINNET_SETTLEMENT_PROOFS_ADDRESS?.trim() || TEMPO_MAINNET_REGISTRY,
+  );
+  const tempoMainnetFromBlockRaw =
+    process.env.NEXT_PUBLIC_TEMPO_MAINNET_REGISTRY_FROM_BLOCK?.trim() ||
+    (tempoMainnetAddress === TEMPO_MAINNET_REGISTRY ? TEMPO_MAINNET_REGISTRY_FROM_BLOCK : "");
+  const tempoMainnetFromBlock = /^\d+$/.test(tempoMainnetFromBlockRaw)
+    ? BigInt(tempoMainnetFromBlockRaw)
+    : undefined;
+  const tempoMainnetRpcUrl =
+    process.env.NEXT_PUBLIC_TEMPO_MAINNET_RPC_URL?.trim() || TEMPO_MAINNET_RPC;
+  const tempoMainnetExplorer = stripSlash(
+    process.env.NEXT_PUBLIC_TEMPO_MAINNET_EXPLORER?.trim() || TEMPO_MAINNET_EXPLORER,
+  );
+  const tempoMainnetChainId = Number(
+    process.env.NEXT_PUBLIC_TEMPO_MAINNET_CHAIN_ID ?? String(TEMPO_MAINNET_CHAIN_ID),
+  );
+
   const networks: Record<NetworkId, NetworkDefinition> = {
     arc: {
       id: "arc",
@@ -131,8 +175,8 @@ export function getPublicConfig(): PublicConfig {
     },
     tempo: {
       id: "tempo",
-      label: "Tempo",
-      shortLabel: "Tempo",
+      label: "Tempo testnet",
+      shortLabel: "Tempo testnet",
       role: "registry",
       chainId: tempoChainId,
       explorer: tempoExplorer,
@@ -145,6 +189,22 @@ export function getPublicConfig(): PublicConfig {
       eip155: `eip155:${tempoChainId}`,
       blurb:
         "Tempo Moderato testnet: the stablecoin payment and its proof both live on Tempo (TIP-20 pathUSD / AlphaUSD / BetaUSD / ThetaUSD). Same SettlementProofs contract as Arc.",
+    },
+    "tempo-mainnet": {
+      id: "tempo-mainnet",
+      label: "Tempo mainnet",
+      shortLabel: "Tempo mainnet",
+      role: "registry",
+      chainId: tempoMainnetChainId,
+      explorer: tempoMainnetExplorer,
+      rpcUrl: tempoMainnetRpcUrl,
+      paymentRpcUrl: tempoMainnetRpcUrl,
+      logsFromBlock: tempoMainnetFromBlock,
+      logChunk: BigInt(90_000),
+      settlementProofsAddress: tempoMainnetAddress,
+      eip155: `eip155:${tempoMainnetChainId}`,
+      blurb:
+        "Tempo mainnet: real TIP-20 stablecoin payments (USDC.e) and their proofs both live on Tempo. Registry deployed and source-verified on chain 4217; same SettlementProofs contract as Arc.",
     },
   };
 
