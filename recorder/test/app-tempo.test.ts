@@ -6,7 +6,7 @@ import { deriveRefId, type Proof } from "../src/arc.js";
 import { loadConfig } from "../src/config.js";
 import { parseErc20UsdcAmount, type Erc20UsdcAmount } from "../src/decimals.js";
 import { formatProofMemo } from "../src/proof-memo.js";
-import type { Rail, RailId, VerifiedPayment, WriteArgs } from "../src/rails.js";
+import { tempoVerifierNetwork, type Rail, type RailId, type VerifiedPayment, type WriteArgs } from "../src/rails.js";
 
 const KEY = "test-key";
 const PAYER = "0x5eA5bE7aDf358fB239037406c55016ac8aB01f49" as Address;
@@ -185,6 +185,27 @@ describe("POST /v1/tempo/proofs — Tempo payment in, Tempo proof out", () => {
   });
 });
 
+describe("Tempo mainnet verifyUrl", () => {
+  it("mainnet chain 4217 links to the Tempo mainnet verifier tab; testnet keeps ?network=tempo", () => {
+    assert.equal(tempoVerifierNetwork(4217), "tempo-mainnet");
+    assert.equal(tempoVerifierNetwork(42431), "tempo");
+  });
+
+  it("verifyUrl uses registry.verifierNetwork when set", async () => {
+    const { rail } = fakeTempoRail();
+    const mainnetRail: Rail = {
+      ...rail,
+      registry: { ...rail.registry, chainId: 4217, verifierNetwork: "tempo-mainnet" },
+    };
+    const res = await post(app({ tempo: mainnetRail }), "/v1/tempo/proofs", body);
+    assert.equal(res.status, 201);
+    const json = (await res.json()) as Record<string, any>;
+    const refId = deriveRefId(PAY_TX, PAYEE, parseErc20UsdcAmount("12500000"));
+    assert.equal(json.verifyUrl, `https://proofs.liquidlogicx.com/proofs/${refId}?network=tempo-mainnet`);
+    assert.equal(json.registry.network, "tempo", "API field stays the rail id");
+  });
+});
+
 describe("rail selection", () => {
   const tempo = fakeTempoRail().rail;
   const arc = { ...tempo, id: "arc" } as Rail;
@@ -237,6 +258,30 @@ describe("loadConfig rails", () => {
   it("both rails together", () => {
     const cfg = loadConfig({ ...arcEnv, ...tempoEnv });
     assert.ok(cfg.arc && cfg.tempo);
+  });
+
+  it("Tempo mainnet env (Render switch-over) leaves the Arc rail config identical", () => {
+    const mainnetEnv = {
+      TEMPO_SETTLEMENT_PROOFS_ADDRESS: "0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A",
+      TEMPO_RECORDER_PRIVATE_KEY: K2,
+      TEMPO_RPC_URL: "https://rpc.tempo.xyz",
+      TEMPO_EXPLORER: "https://explore.tempo.xyz",
+      TEMPO_ALLOW_MAINNET: "true",
+      TEMPO_FEE_TOKEN: "0x20C000000000000000000000b9537d11c60E8b50",
+      TEMPO_ALLOWED_TOKENS:
+        "0x20C000000000000000000000b9537d11c60E8b50:USDC.e,0x20C0000000000000000000000000000000000000:pathUSD",
+      TEMPO_MIN_RECORDER_FEE_BALANCE: "50000",
+      TEMPO_MIN_CONFIRMATIONS: "1",
+    };
+    const arcOnly = loadConfig(arcEnv);
+    const both = loadConfig({ ...arcEnv, ...mainnetEnv });
+    assert.deepEqual(both.arc, arcOnly.arc);
+    assert.ok(both.tempo);
+    assert.equal(both.tempo.allowMainnet, true);
+    assert.equal(both.tempo.rpcUrl, "https://rpc.tempo.xyz");
+    assert.equal(both.tempo.feeToken, "0x20C000000000000000000000b9537d11c60E8b50");
+    assert.equal(both.tempo.tokens.get("0x20c000000000000000000000b9537d11c60e8b50")?.symbol, "USDC.e");
+    assert.equal(both.tempo.tokens.size, 2);
   });
 
   it("refuses to reuse the Arc recorder key on Tempo", () => {

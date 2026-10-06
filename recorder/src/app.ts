@@ -158,7 +158,7 @@ export function createApp(deps: AppDeps) {
   }
 
   function verifyUrl(rail: Rail, refId: Hex) {
-    return `${deps.verifierBaseUrl}/proofs/${refId}?network=${rail.registry.network}`;
+    return `${deps.verifierBaseUrl}/proofs/${refId}?network=${rail.registry.verifierNetwork ?? rail.registry.network}`;
   }
 
   /** Best-effort proofId + registry tx for a refId (null on RPC error). Sequential on purpose. */

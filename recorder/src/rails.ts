@@ -59,7 +59,14 @@ export type Rail = {
   /** Human label, e.g. "Base → Arc". */
   label: string;
   payment: { network: "base" | "tempo"; chainId: number; explorer: string };
-  registry: { network: RailId; chainId: number; address: Address; explorer: string };
+  registry: {
+    network: RailId;
+    chainId: number;
+    address: Address;
+    explorer: string;
+    /** Public verifier tab key used in verifyUrl (?network=…). Defaults to `network`. */
+    verifierNetwork?: string;
+  };
   recorderAddress: Address;
   minConfirmations: number;
   readProof(refId: Hex): Promise<Proof | null>;
@@ -174,6 +181,11 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
   };
 }
 
+/** Verifier tab for a Tempo chain: mainnet proofs open the "Tempo mainnet" tab, testnet keeps ?network=tempo. */
+export function tempoVerifierNetwork(chainId: number): "tempo" | "tempo-mainnet" {
+  return chainId === TEMPO_MAINNET_CHAIN_ID ? "tempo-mainnet" : "tempo";
+}
+
 /** Tempo public RPC caps eth_getLogs at 100_000 blocks; stay under it. */
 export const TEMPO_LOG_CHUNK = 90_000n;
 
@@ -199,7 +211,13 @@ export async function createTempoRail(cfg: TempoRailConfig): Promise<Rail> {
     id: "tempo",
     label: "Tempo → Tempo",
     payment: { network: "tempo", chainId, explorer: cfg.explorer },
-    registry: { network: "tempo", chainId, address: cfg.settlementProofsAddress, explorer: cfg.explorer },
+    registry: {
+      network: "tempo",
+      chainId,
+      address: cfg.settlementProofsAddress,
+      explorer: cfg.explorer,
+      verifierNetwork: tempoVerifierNetwork(chainId),
+    },
     recorderAddress: tempo.account.address,
     minConfirmations: cfg.minConfirmations,
     readProof: (refId) =>

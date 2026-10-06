@@ -8,7 +8,7 @@ Public addresses the verifier and recorder may point at. **Verifier production m
 | --- | --- | --- | --- | --- |
 | Arc mainnet (`5042`) | registry | SettlementProofs | [`0x1de52cbc4490a7873ef007e51cb91a5b374facb1`](https://explorer.arc.io/address/0x1de52cbc4490a7873ef007e51cb91a5b374facb1) | Live. USDC payments verified on Base. |
 | Tempo Moderato (`42431`) | registry | SettlementProofs **v2** | [`0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b`](https://explore.testnet.tempo.xyz/address/0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b) | **Current.** Deploy block `38311217`. Three real TIP-20 proofs. |
-| Tempo mainnet (`4217`) | registry | SettlementProofs | [`0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`](https://explore.tempo.xyz/address/0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A) | **Deployed 2026-10-05 PT**, deploy block `42806697`, source exact_match on `contracts.tempo.xyz`. Admin `0x02326e16…6c4e` (Miles), recorder `0xea80a0db…6dac`; deployer holds no role. **Not wired** to the verifier or recorder yet. See [`tempo-mainnet-prep.md`](tempo-mainnet-prep.md). |
+| Tempo mainnet (`4217`) | registry | SettlementProofs | [`0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`](https://explore.tempo.xyz/address/0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A) | **Deployed 2026-10-05 PT**, deploy block `42806697`, source exact_match on `contracts.tempo.xyz`. Admin `0x02326e16…6c4e` (Miles), recorder `0xea80a0db…6dac`; deployer holds no role. Verifier: separate **Tempo mainnet** tab (`?network=tempo-mainnet`, hardcoded defaults, no Vercel env needed). Recorder: switch-over in [`render-tempo-env.md`](render-tempo-env.md#tempo-mainnet-switch-over). See [`tempo-mainnet-prep.md`](tempo-mainnet-prep.md). |
 
 ### Verifier (Vercel project `settlement-proofs-arc`)
 
@@ -19,6 +19,8 @@ Public addresses the verifier and recorder may point at. **Verifier production m
 | `NEXT_PUBLIC_TEMPO_RPC_URL` | `https://rpc.moderato.tempo.xyz` |
 | `NEXT_PUBLIC_TEMPO_EXPLORER` | `https://explore.testnet.tempo.xyz` |
 | `NEXT_PUBLIC_TEMPO_CHAIN_ID` | `42431` |
+
+These `NEXT_PUBLIC_TEMPO_*` values feed the **Tempo testnet** tab (`?network=tempo`) and must stay on Moderato. The **Tempo mainnet** tab (`?network=tempo-mainnet`) uses hardcoded defaults (`0x9940…DfE6A`, block `42806697`, `https://rpc.tempo.xyz`, `https://explore.tempo.xyz`, chain `4217`); optional overrides are `NEXT_PUBLIC_TEMPO_MAINNET_SETTLEMENT_PROOFS_ADDRESS`, `NEXT_PUBLIC_TEMPO_MAINNET_REGISTRY_FROM_BLOCK`, `NEXT_PUBLIC_TEMPO_MAINNET_RPC_URL`, `NEXT_PUBLIC_TEMPO_MAINNET_EXPLORER`, `NEXT_PUBLIC_TEMPO_MAINNET_CHAIN_ID`, plus `NEXT_PUBLIC_TEMPO_DEFAULT_NETWORK` (`auto` | `tempo-mainnet` | `tempo`).
 
 If `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` is **unset**, the web app already defaults to the v2 address above (`web/src/lib/config.ts`). Setting the vars locks production to v2 explicitly. **Do not** set the address to the legacy v1 value.
 

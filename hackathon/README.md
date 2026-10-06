@@ -17,13 +17,14 @@
 2. Optional: enable the Tempo rail on Render `arc-settlement-recorder` so new Tempo proofs can be recorded live. Exact var **names**: [`../docs/render-tempo-env.md`](../docs/render-tempo-env.md). Miles pastes keys in the Render Environment tab only. Demo works without this (three proofs already on-chain).
 3. Fill in the `[MILES: …]` placeholders in `submission-answers.md` (team, location, background, traction numbers, video URLs).
 4. Record both videos (see `pitch.md` and `demo-script.md`), upload unlisted (YouTube or Loom), paste into the **Media and code** tab answers in `submission-answers.md`.
-5. Tempo **mainnet** deploy is prepared but **not** broadcast — see [`../docs/tempo-mainnet-prep.md`](../docs/tempo-mainnet-prep.md). Needs Miles's admin wallet address, funding in pathUSD, and explicit OK.
+5. Tempo **mainnet**: the `SettlementProofs` registry is **deployed and source-verified on Tempo mainnet** (`0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A`, chain 4217, Sourcify exact_match, admin = Miles's wallet). See [`../docs/tempo-mainnet-prep.md`](../docs/tempo-mainnet-prep.md). **No mainnet proofs yet**, so proof claims stay on Tempo testnet until the first real mainnet proof is recorded (Render switch-over: [`../docs/render-tempo-env.md`](../docs/render-tempo-env.md#tempo-mainnet-switch-over)). The verifier gets a separate "Tempo mainnet" tab (`?network=tempo-mainnet`); `?network=tempo` stays the testnet demo.
 6. Optional but recommended by Colosseum: weekly 1-minute update videos.
 
 ## Key links
 
 - Verifier: https://proofs.liquidlogicx.com/?network=tempo
 - Repo (public): https://github.com/LiquidLogicX/settlement-proofs-arc
-- Tempo registry (Moderato): https://explore.testnet.tempo.xyz/address/0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b
+- Tempo registry (Moderato testnet, 3 demo proofs): https://explore.testnet.tempo.xyz/address/0x2ec4CF47e6964b33FEd3718f07885ed44aF52c0b
+- Tempo registry (mainnet, deployed + source-verified, no proofs yet): https://explore.tempo.xyz/address/0x9940a8fE88f8BE0bB8E05686631Fd638DC1DfE6A
 - Arc registry (mainnet): https://explorer.arc.io/address/0x1de52cbc4490a7873ef007e51cb91a5b374facb1
 - Hackathon: https://colosseum.com/worldsfair

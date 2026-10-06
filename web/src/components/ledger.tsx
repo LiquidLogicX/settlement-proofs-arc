@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import {
   formatPaidAt,
   formatUsdc,
   getNetwork,
+  isTempoNetwork,
   shortenAddress,
   type NetworkId,
 } from "@/lib/config";
@@ -141,9 +143,9 @@ export function Ledger({
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Total settled"
-          value={data ? `${formatUsdc(data.totalSettled)} ${networkId === "tempo" ? "USD" : "USDC"}` : "—"}
+          value={data ? `${formatUsdc(data.totalSettled)} ${isTempoNetwork(networkId) ? "USD" : "USDC"}` : "—"}
           hint={
-            networkId === "tempo"
+            isTempoNetwork(networkId)
               ? "Sum of notarized TIP-20 stablecoin payments on Tempo (6-dec units)"
               : "Sum of notarized Base USDC (6-dec ERC-20 units)"
           }
@@ -197,9 +199,21 @@ export function Ledger({
         <Card className="border-dashed border-white/15 bg-card/50">
           <CardContent className="py-12 text-center text-muted-foreground">
             No settlement proofs recorded yet on {network.label}.{" "}
-            {networkId === "tempo"
-              ? "When a stablecoin payment lands on Tempo, the recorder verifies it and writes an immutable proof here."
-              : "When the treasurer pays USDC on Base, the recorder notarizes an immutable proof here."}
+            {networkId === "tempo-mainnet" ? (
+              <>
+                The registry is deployed and source-verified on Tempo mainnet. When a real
+                stablecoin payment (USDC.e) lands on Tempo, the recorder verifies it and writes an
+                immutable proof here. Demo proofs are on the{" "}
+                <Link href="/?network=tempo" className="text-llx-link hover:text-foreground">
+                  Tempo testnet
+                </Link>{" "}
+                tab.
+              </>
+            ) : isTempoNetwork(networkId) ? (
+              "When a stablecoin payment lands on Tempo, the recorder verifies it and writes an immutable proof here."
+            ) : (
+              "When the treasurer pays USDC on Base, the recorder notarizes an immutable proof here."
+            )}
           </CardContent>
         </Card>
       ) : null}
