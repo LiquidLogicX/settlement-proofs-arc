@@ -21,7 +21,7 @@ Programmatic chain access uses JSON-RPC only (`BASE_RPC_URL`, `ARC_RPC_URL=https
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | RPC reachability, recorder address, gas balance; `rails` lists each configured rail (open, no auth) |
+| `GET` | `/health` | Always answers fast (Render probe). Recorder address and gas balance from a cached chain check (refreshed in the background every ~15 s, each RPC check capped at 4 s); `rails` lists each configured rail, `chain` shows `checkedAt`, `stale` and any refresh `errors` (open, no auth) |
 | `POST` | `/v1/proofs` | Verify the payment and record a proof (**requires API key**). Optional `chain`: `"base"`/`"arc"` (default when Arc is configured), `"tempo"`, or a CAIP-2 id |
 | `POST` | `/v1/tempo/proofs` | Same as `/v1/proofs` with `chain: "tempo"` |
 | `GET` | `/v1/proofs/lookup` | Read-only: is this proof already recorded? Returns `proofId` + Arc `proofTxHash` (**requires API key**) |
@@ -166,7 +166,7 @@ Use the root `render.yaml` or create a **Web Service**:
 - Runtime: Docker
 - Dockerfile path: `recorder/Dockerfile`
 - Docker context: `recorder`
-- Health check path: `/health`
+- Health check path: `/health`. It never waits on Arc/Tempo RPC (only the very first request after boot waits, at most 2 s), so a slow public RPC can't fail Render's 5 s probe and restart the instance. Writes still check gas live.
 
 Environment variables (sync: false / secret in the dashboard):
 

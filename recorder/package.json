@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/decimals.test.ts test/verify-path.test.ts test/proof-lookup.test.ts test/tempo.test.ts test/proof-memo.test.ts test/app-tempo.test.ts",
+    "test": "tsx --test test/decimals.test.ts test/verify-path.test.ts test/proof-lookup.test.ts test/tempo.test.ts test/proof-memo.test.ts test/app-tempo.test.ts test/health.test.ts",
     "demo:tempo": "tsx scripts/tempo-demo-pay.ts",
     "test:decimals": "tsx --test test/decimals.test.ts"
   },
