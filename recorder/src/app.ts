@@ -15,6 +15,7 @@ import { logger } from "hono/logger";
 import { type Address, type Hex, getAddress, isAddress, isHash, isHex } from "viem";
 import { deriveRefId, isDuplicateRefError, serializeProof, type Proof } from "./arc.js";
 import { type Erc20UsdcAmount, parseErc20UsdcAmount } from "./decimals.js";
+import { type HealthCacheOptions, createHealthCache } from "./health-cache.js";
 import type { Rail, RailId, VerifiedPayment } from "./rails.js";
 
 export type ProofBody = {
@@ -33,6 +34,8 @@ export type AppDeps = {
   verifierBaseUrl: string;
   /** Disable request logging in tests. */
   quiet?: boolean;
+  /** /health chain-status cache tuning (tests). */
+  health?: HealthCacheOptions;
 };
 
 /** Write path: 30 POSTs per IP per minute. Lookup path: 120 GETs per IP per minute. */
@@ -238,23 +241,21 @@ export function createApp(deps: AppDeps) {
   if (!deps.quiet) app.use("*", logger());
   app.use("*", cors());
 
+  // Render's probe gives /health 5 s. Answer from a cached chain snapshot so a slow
+  // Arc/Tempo RPC can never make the probe time out (see health-cache.ts).
+  const healthCache = createHealthCache(Object.values(deps.rails).filter(Boolean) as Rail[], deps.health);
+
   app.get("/health", async (c) => {
-    const rails = Object.values(deps.rails).filter(Boolean) as Rail[];
-    try {
-      const healths = await Promise.all(rails.map((r) => r.health()));
-      const byId = Object.fromEntries(healths.map((h, i) => [rails[i]!.id, h]));
-      // Keep the original flat Arc fields at top level for existing monitors.
-      const arc = byId.arc ?? {};
-      return c.json({
-        ok: true,
-        ...arc,
-        rails: byId,
-        note: "Payment is verified on its own chain before any write (Base USDC for the Arc registry; TIP-20 stablecoins for the Tempo registry). Proofs are public and append-only. No confidentiality; no ALLOW_UNVERIFIED_AMOUNT.",
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ ok: false, error: message }, 503);
-    }
+    const { byId, chain } = await healthCache.view();
+    // Keep the original flat Arc fields at top level for existing monitors.
+    const arc = byId.arc ?? {};
+    return c.json({
+      ok: true,
+      ...arc,
+      rails: byId,
+      chain,
+      note: "Payment is verified on its own chain before any write (Base USDC for the Arc registry; TIP-20 stablecoins for the Tempo registry). Proofs are public and append-only. No confidentiality; no ALLOW_UNVERIFIED_AMOUNT.",
+    });
   });
 
   async function handleWrite(c: Context, forced?: RailId) {
