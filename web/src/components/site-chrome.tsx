@@ -96,7 +96,7 @@ export async function SiteChrome({
             testnet ({getNetwork("tempo").eip155}) · Base USDC → Arc
             proof · Tempo stablecoin → Tempo proof · public srcTxHash
           </span>
-          <span>MIT License</span>
+          <span>© 2026 Liquid Logic X LLC · MIT License</span>
         </div>
       </footer>
     </div>
