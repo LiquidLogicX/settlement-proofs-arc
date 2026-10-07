@@ -1,13 +1,20 @@
+import type { Metadata } from "next";
 import { Ledger } from "@/components/ledger";
 import { SiteChrome } from "@/components/site-chrome";
 import { getNetwork, parseNetworkId } from "@/lib/config";
 import { fetchLedger, serializeLedger } from "@/lib/proofs";
+import { networkTabTitle } from "@/lib/tab-title";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = {
   searchParams: Promise<{ network?: string }>;
 };
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const { network } = await searchParams;
+  return { title: networkTabTitle(network) };
+}
 
 export default async function Home({ searchParams }: PageProps) {
   const params = await searchParams;
