@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BASE_TAB_TITLE } from "@/lib/tab-title";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,7 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Settlement proofs on Arc",
+  // Pages override this per ?network= via generateMetadata (see lib/tab-title.ts).
+  title: BASE_TAB_TITLE,
   description:
     "Public append-only settlement proofs on Arc for an AI treasurer. Base USDC payments notarized on Arc with cleartext payee and public srcTxHash.",
   icons: {

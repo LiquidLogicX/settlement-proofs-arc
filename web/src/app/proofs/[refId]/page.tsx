@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProofFieldList } from "@/components/proof-details";
@@ -7,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatUsdc, getNetwork, parseNetworkId } from "@/lib/config";
 import { paymentOf } from "@/lib/payments";
+import { networkTabTitle } from "@/lib/tab-title";
 import { fetchProofByRefId, isSelfTestMemo, isTempoSyntheticSelfTest, selfTestBadgeLabel } from "@/lib/proofs";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,11 @@ type PageProps = {
   params: Promise<{ refId: string }>;
   searchParams: Promise<{ network?: string }>;
 };
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const { network } = await searchParams;
+  return { title: networkTabTitle(network) };
+}
 
 export default async function ProofDetailPage({ params, searchParams }: PageProps) {
   const { refId: rawRefId } = await params;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { NetworkSwitcher } from "@/components/network-switcher";
+import { NetworkTabTitle } from "@/components/network-tab-title";
 import { getNetwork, isTempoNetwork, tempoTabOrder, type NetworkId } from "@/lib/config";
 import { resolveDefaultTempoNetwork } from "@/lib/tempo-default";
 
@@ -58,6 +59,7 @@ export async function SiteChrome({
             </nav>
           </div>
           <Suspense fallback={null}>
+            <NetworkTabTitle />
             <NetworkSwitcher active={network} order={order} />
           </Suspense>
           {showMainnetHint ? (
