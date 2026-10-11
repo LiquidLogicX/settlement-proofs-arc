@@ -89,7 +89,7 @@ You do not need an account or wallet to check a proof.
 
 | What | URL |
 | --- | --- |
-| Demo video | https://youtu.be/5mfjB_rWpH4 |
+| Demo video | https://youtu.be/PRQFzmCjcrs |
 | Pay demo | https://llx-pay.vercel.app |
 | Proofs (Tempo mainnet) | https://proofs.liquidlogicx.com/?network=tempo-mainnet |
 | Site | https://liquidlogicx.com |
