@@ -15,7 +15,7 @@ This page is the shortest path for Colosseum / Tempo-track judges to understand 
 | Recorder | Verifies the payment on-chain, then appends a permanent proof to the registry |
 | Public verifier | https://proofs.liquidlogicx.com/?network=tempo-mainnet |
 | Demo Pay (LLX Pay) | https://llx-pay.vercel.app — treasurer-backed Demo Pay on Tempo |
-| Policy (code-enforced) | Max **5** USDC.e per payment · **25** USDC.e / day · payee allowlist · hold-for-approval at/above **2.00** · human must Approve before the transfer fires |
+| Policy (code-enforced) | Max **5** USDC.e per payment · **25** USDC.e / day · payee allowlist · hold-for-approval at/above **2.00** · human must Approve before the transfer fires. Limits are set per business — per-payment cap, daily cap, payee allowlist and the hold threshold are all configurable. The demo uses 5 / 25 / 2.00 USDC.e. |
 
 ## Architecture
 
