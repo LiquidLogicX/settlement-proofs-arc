@@ -4,6 +4,8 @@
 
 Send a payment transaction hash. LLX Settlement Proofs confirms the transfer on-chain (right payee, right amount, right token), then writes a permanent, append-only proof record and gives you a public link. The link shows who paid, who got paid, how much, and both transactions. No account or wallet is needed to check it.
 
+**Colosseum / Tempo judges:** see [`JUDGES.md`](JUDGES.md) for Demo Pay on Tempo mainnet, architecture, and live payment/proof hashes you can verify yourself.
+
 Live on two registries:
 
 | Registry | Payment it proves | Status |
