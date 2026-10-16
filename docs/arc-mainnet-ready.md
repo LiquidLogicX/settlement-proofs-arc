@@ -10,10 +10,10 @@ Base USDC payment → `SettlementProofs.recordPayment` on Arc `eip155:5042`. Pub
 
 `contracts/script/Deploy.s.sol:DeploySettlementProofs`
 
-Dry-run (throwaway Anvil key #0 — **never fund or broadcast**):
+Dry-run (use a throwaway key — **never fund or broadcast** it; never commit a real key):
 
 ```bash
-export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE   # use your own throwaway key for the dry-run; never commit a real key
 export RECORDER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 forge script script/Deploy.s.sol:DeploySettlementProofs --sig "run()" \
   --rpc-url https://rpc.mainnet.arc.io -vvvv
