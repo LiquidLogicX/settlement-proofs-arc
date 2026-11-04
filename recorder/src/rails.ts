@@ -17,7 +17,7 @@ import {
   writeProof,
   type Proof,
 } from "./arc.js";
-import { createBaseClient, verifyBasePayment } from "./base.js";
+import { basePaymentReader, createBaseClient, verifyBasePayment } from "./base.js";
 import type { ArcRailConfig, TempoRailConfig } from "./config.js";
 import { ARC_ERC20_USDC_DECIMALS, ARC_NATIVE_USDC_DECIMALS, type Erc20UsdcAmount } from "./decimals.js";
 import { isGasLow, lowGasError } from "./gas-guard.js";
@@ -69,6 +69,8 @@ export type Rail = {
   };
   recorderAddress: Address;
   minConfirmations: number;
+  /** Base rail only: MIN_CONFIRMATION_SECONDS. Tempo leaves this unset. */
+  minConfirmationSeconds?: number;
   readProof(refId: Hex): Promise<Proof | null>;
   verifyPayment(args: { txHash: Hex; payee: Address; amountUSDC: Erc20UsdcAmount }): Promise<VerifiedPayment>;
   /** Validate the operator note for this rail; return an error string to reject (400). */
@@ -97,7 +99,7 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
     privateKey: cfg.recorderPrivateKey,
     chain: arcChainFromId(chainId),
   });
-  const baseClient = createBaseClient(cfg.baseRpcUrl);
+  const baseClient = basePaymentReader(createBaseClient(cfg.baseRpcUrl));
   const reader = arc.publicClient as unknown as ArcReader;
   const explorer = arc.publicClient.chain?.blockExplorers?.default.url ?? "https://explorer.arc.io";
 
@@ -108,6 +110,7 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
     registry: { network: "arc", chainId, address: cfg.settlementProofsAddress, explorer },
     recorderAddress: arc.account.address,
     minConfirmations: cfg.minConfirmations,
+    minConfirmationSeconds: cfg.minConfirmationSeconds,
     readProof: (refId) =>
       readProof({ publicClient: arc.publicClient, address: cfg.settlementProofsAddress, refId }),
     async verifyPayment({ txHash, payee, amountUSDC }) {
@@ -117,6 +120,7 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
         payee,
         amountUSDC,
         minConfirmations: cfg.minConfirmations,
+        minConfirmationSeconds: cfg.minConfirmationSeconds,
       });
       return {
         chainId: 8453,
@@ -175,6 +179,7 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
         lowGas: isGasLow(balance, cfg.minRecorderGasWei),
         proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
         minConfirmations: cfg.minConfirmations,
+        minConfirmationSeconds: cfg.minConfirmationSeconds,
         settlementRail: "base-usdc-notarize-arc",
       };
     },
