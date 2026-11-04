@@ -227,6 +227,11 @@ describe("TX_NOT_CONFIRMED HTTP response", () => {
       async readProof() {
         return null;
       },
+      // Replay checks read the registry index before verifyPayment. An empty
+      // index lets this request reach the confirmation-wait error.
+      async listProofs() {
+        return [];
+      },
       async verifyPayment() {
         throw Object.assign(new Error("Base transaction has 1 confirmation(s); need at least 300"), {
           status: 400,

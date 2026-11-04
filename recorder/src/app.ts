@@ -1,7 +1,9 @@
 /**
  * HTTP API (Hono). Pure wiring over `Rail`s so tests can inject fakes.
  *
- *   POST /v1/proofs            { chain?: "base"|"arc"|"tempo", txHash, payee, amountUSDC, memo?, refId?, paidAt? }
+ *   POST /v1/proofs            { chain?: "base"|"arc"|"tempo", txHash, payee, amountUSDC, memo?, refId? }
+ *   paidAt is taken from the payment block. A client value is ignored.
+ *   A supplied refId must equal keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC)).
  *   POST /v1/tempo/proofs      same body; chain forced to "tempo"
  *   GET  /v1/proofs/lookup     ?chain=&refId=  or  ?chain=&txHash=&payee=&amountUSDC=
  *   GET  /health
@@ -9,11 +11,19 @@
  * Every write verifies the payment on its own chain first; unmatched amounts are
  * rejected (400) and never recorded.
  */
+import { timingSafeEqual } from "node:crypto";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { type Address, type Hex, getAddress, isAddress, isHash, isHex } from "viem";
 import { deriveRefId, isDuplicateRefError, serializeProof, type Proof } from "./arc.js";
+import {
+  isLegacySettlementRef,
+  settlementRefMessage,
+  usedRefIdsForSettlement,
+  verifyRecordedProof,
+  verifySettlementRef,
+} from "./settlement-ref.js";
 import { type Erc20UsdcAmount, parseErc20UsdcAmount } from "./decimals.js";
 import { type HealthCacheOptions, createHealthCache } from "./health-cache.js";
 import type { Rail, RailId, VerifiedPayment } from "./rails.js";
@@ -139,6 +149,18 @@ function extractApiKey(c: Req): string | undefined {
   return match?.[1]?.trim();
 }
 
+/** Constant-time API key compare. Different lengths are a miss; `timingSafeEqual` throws on those. */
+export function apiKeysMatch(provided: string | undefined, expected: string): boolean {
+  if (!provided) return false;
+  const got = Buffer.from(provided);
+  const want = Buffer.from(expected);
+  if (got.length !== want.length) {
+    timingSafeEqual(want, want);
+    return false;
+  }
+  return timingSafeEqual(got, want);
+}
+
 export function createApp(deps: AppDeps) {
   const writeHits = new Map<string, number[]>();
   const readHits = new Map<string, number[]>();
@@ -156,8 +178,7 @@ export function createApp(deps: AppDeps) {
   }
 
   function authorized(c: Req): boolean {
-    const key = extractApiKey(c);
-    return Boolean(key) && key === deps.recorderApiKey;
+    return apiKeysMatch(extractApiKey(c), deps.recorderApiKey);
   }
 
   function verifyUrl(rail: Rail, refId: Hex) {
@@ -246,16 +267,10 @@ export function createApp(deps: AppDeps) {
   const healthCache = createHealthCache(Object.values(deps.rails).filter(Boolean) as Rail[], deps.health);
 
   app.get("/health", async (c) => {
-    const { byId, chain } = await healthCache.view();
-    // Keep the original flat Arc fields at top level for existing monitors.
-    const arc = byId.arc ?? {};
-    return c.json({
-      ok: true,
-      ...arc,
-      rails: byId,
-      chain,
-      note: "Payment is verified on its own chain before any write (Base USDC for the Arc registry; TIP-20 stablecoins for the Tempo registry). Proofs are public and append-only. No confidentiality; no ALLOW_UNVERIFIED_AMOUNT.",
-    });
+    // Unauthenticated liveness probe. Keep the chain snapshot off this response:
+    // recorder addresses, fee balances, and RPC errors are not public.
+    await healthCache.view().catch(() => undefined);
+    return c.json({ ok: true });
   });
 
   async function handleWrite(c: Context, forced?: RailId) {
@@ -281,11 +296,47 @@ export function createApp(deps: AppDeps) {
     if (noteError) return c.json({ error: noteError }, 400);
 
     const { txHash, payee, amountUSDC } = parsed;
-    const refId = parsed.refId ?? deriveRefId(txHash, payee, amountUSDC);
+    const expectedRefId = deriveRefId(txHash, payee, amountUSDC);
+    // A supplied id has to be the payment hash. Replay against the index is
+    // checked below, after an exact retry of that same id is allowed through.
+    if (parsed.refId && parsed.refId.toLowerCase() !== expectedRefId.toLowerCase()) {
+      const verdict = verifySettlementRef({
+        claimedRefId: parsed.refId,
+        payload: {
+          refId: expectedRefId,
+          payee,
+          amountUSDC,
+          paidAt: 0,
+          srcTxHash: txHash,
+        },
+        usedRefIds: new Set(),
+      });
+      if (!verdict.ok) {
+        return c.json(
+          { error: settlementRefMessage(verdict.code), code: verdict.code },
+          400,
+        );
+      }
+    }
+    const refId = expectedRefId;
 
     try {
-      const existing = await rail.readProof(refId);
+      const indexed = await rail.listProofs().catch((err: unknown) => {
+        const error = err instanceof Error ? err : new Error(String(err));
+        throw Object.assign(error, {
+          status: (err as { status?: number }).status ?? 503,
+          code: (err as { code?: string }).code ?? "REGISTRY_READ_FAILED",
+        });
+      });
+      const fromIndex = indexed.find((proof) => proof.refId.toLowerCase() === refId.toLowerCase());
+      const existing = fromIndex ?? (await rail.readProof(refId));
       if (existing) {
+        if (!storedPayloadMatches(existing, { refId, txHash, payee, amountUSDC })) {
+          return c.json(
+            { error: "refId does not match the recorded settlement payload", code: "REF_MISMATCH" },
+            409,
+          );
+        }
         const loc = await proofLocation(rail, refId, existing.recordedAt);
         // Tempo reads are cheap (~0.5 s blocks, one RPC): re-check so the response carries payer/token.
         // Arc keeps its original idempotent path (no extra Base RPC calls).
@@ -302,8 +353,28 @@ export function createApp(deps: AppDeps) {
         return c.json(proofResponse(rail, existing, { idempotent: true, ...loc, payment }));
       }
 
+      const usedRefIds = usedRefIdsForSettlement(indexed, { srcTxHash: txHash, payee, amountUSDC });
+      const replay = verifySettlementRef({
+        claimedRefId: refId,
+        payload: {
+          refId,
+          payee,
+          amountUSDC,
+          paidAt: 0,
+          srcTxHash: txHash,
+        },
+        usedRefIds,
+      });
+      if (!replay.ok) {
+        return c.json(
+          { error: settlementRefMessage(replay.code), code: replay.code },
+          replay.code === "REF_REUSED" ? 409 : 400,
+        );
+      }
+
       const payment = await rail.verifyPayment({ txHash, payee, amountUSDC });
-      const paidAt = parsed.paidAt ?? Number(payment.blockTimestamp);
+      // paidAt is the payment block time. A client-supplied value is ignored.
+      const paidAt = Number(payment.blockTimestamp);
       const memo = rail.buildMemo(parsed.memo, payment);
 
       // Low-balance guard: fail fast with 503 instead of failing mid-write.
@@ -315,7 +386,7 @@ export function createApp(deps: AppDeps) {
       } catch (err) {
         if (isDuplicateRefError(err)) {
           const raced = await rail.readProof(refId);
-          if (raced) {
+          if (raced && storedPayloadMatches(raced, { refId, txHash, payee, amountUSDC })) {
             const loc = await proofLocation(rail, refId, raced.recordedAt);
             return c.json(proofResponse(rail, raced, { idempotent: true, ...loc, payment }));
           }
@@ -373,6 +444,7 @@ export function createApp(deps: AppDeps) {
     const rail = deps.rails[railId]!;
 
     let refId: Hex;
+    let paymentKey: { txHash: Hex; payee: Address; amountUSDC: bigint } | null = null;
     const rawRef = c.req.query("refId");
     if (rawRef) {
       if (!isHex(rawRef) || rawRef.length !== 66) {
@@ -387,13 +459,58 @@ export function createApp(deps: AppDeps) {
       });
       if ("error" in parsed) return c.json({ error: parsed.error }, 400);
       refId = deriveRefId(parsed.txHash, parsed.payee, parsed.amountUSDC);
+      paymentKey = { txHash: parsed.txHash, payee: parsed.payee, amountUSDC: parsed.amountUSDC };
     }
 
     try {
-      const existing = await rail.readProof(refId);
+      let existing = await rail.readProof(refId);
+      if (!existing && paymentKey) {
+        const indexed = await rail.listProofs();
+        existing =
+          indexed.find(
+            (proof) =>
+              proof.srcTxHash.toLowerCase() === paymentKey!.txHash.toLowerCase() &&
+              proof.payee.toLowerCase() === paymentKey!.payee.toLowerCase() &&
+              BigInt(proof.amountUSDC) === paymentKey!.amountUSDC,
+          ) ?? null;
+      }
       if (!existing) return c.json({ found: false, refId, rail: rail.id }, 404);
+      const legacy = isLegacySettlementRef(existing);
+      if (!legacy) {
+        const indexed = await rail.listProofs().catch((err: unknown) => {
+          const error = err instanceof Error ? err : new Error(String(err));
+          throw Object.assign(error, {
+            status: (err as { status?: number }).status ?? 503,
+            code: (err as { code?: string }).code ?? "REGISTRY_READ_FAILED",
+          });
+        });
+        const verdict = verifyRecordedProof(
+          {
+            refId: existing.refId,
+            payee: existing.payee,
+            amountUSDC: existing.amountUSDC,
+            paidAt: existing.paidAt,
+            srcTxHash: existing.srcTxHash,
+          },
+          usedRefIdsForSettlement(
+            indexed.filter((proof) => proof.refId.toLowerCase() !== existing.refId.toLowerCase()),
+            {
+              srcTxHash: existing.srcTxHash,
+              payee: existing.payee,
+              amountUSDC: existing.amountUSDC,
+            },
+          ),
+        );
+        if (!verdict.ok) {
+          return c.json({ error: settlementRefMessage(verdict.code), code: verdict.code, refId }, 409);
+        }
+      }
       const loc = await proofLocation(rail, refId, existing.recordedAt);
-      return c.json({ found: true, ...proofResponse(rail, existing, { idempotent: true, ...loc, payment: null }) });
+      return c.json({
+        found: true,
+        legacy,
+        ...proofResponse(rail, existing, { idempotent: true, ...loc, payment: null }),
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message, code: "REGISTRY_READ_FAILED" }, 503);
@@ -401,4 +518,29 @@ export function createApp(deps: AppDeps) {
   });
 
   return app;
+}
+
+function storedPayloadMatches(
+  existing: Proof,
+  args: { refId: Hex; txHash: Hex; payee: Address; amountUSDC: bigint },
+): boolean {
+  // Empty on purpose: this asks whether the stored row is bound to its own
+  // payload. The index is checked separately so a row is not a replay of itself.
+  const verdict = verifyRecordedProof(
+    {
+      refId: existing.refId,
+      payee: existing.payee,
+      amountUSDC: existing.amountUSDC,
+      paidAt: existing.paidAt,
+      srcTxHash: existing.srcTxHash,
+    },
+    new Set(),
+  );
+  return (
+    verdict.ok &&
+    existing.refId.toLowerCase() === args.refId.toLowerCase() &&
+    existing.srcTxHash.toLowerCase() === args.txHash.toLowerCase() &&
+    existing.payee.toLowerCase() === args.payee.toLowerCase() &&
+    BigInt(existing.amountUSDC) === BigInt(args.amountUSDC)
+  );
 }

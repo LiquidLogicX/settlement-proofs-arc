@@ -41,43 +41,82 @@ contract SettlementProofsTest is Test {
     }
 
     function _record(
-        bytes32 refId,
         address payeeAddr,
         uint256 amount,
         uint64 paidAt,
         bytes32 srcTx,
         string memory memo
-    ) internal {
+    ) internal returns (bytes32 refId) {
+        refId = proofs.canonicalRefId(srcTx, payeeAddr, amount);
         vm.prank(recorder);
         proofs.recordPayment(refId, payeeAddr, amount, paidAt, srcTx, memo);
     }
 
     function test_recordPayment_storesImmutableProof() public {
-        _record(REF_A, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        bytes32 refA = _record(payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
 
-        SettlementProofs.Proof memory p = proofs.getProof(REF_A);
-        assertEq(p.refId, REF_A);
+        SettlementProofs.Proof memory p = proofs.getProof(refA);
+        assertEq(p.refId, refA);
         assertEq(p.payee, payee);
         assertEq(p.amountUSDC, AMOUNT_A);
         assertEq(p.paidAt, PAID_AT_A);
         assertEq(p.srcTxHash, SRC_A);
         assertEq(p.memo, MEMO_A);
         assertEq(p.recordedAt, uint64(block.timestamp));
-        assertTrue(proofs.exists(REF_A));
+        assertTrue(proofs.exists(refA));
     }
 
     function test_recordPayment_emitsPaymentRecorded() public {
+        bytes32 refA = proofs.canonicalRefId(SRC_A, payee, AMOUNT_A);
         vm.expectEmit(true, true, false, true, address(proofs));
-        emit PaymentRecorded(REF_A, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        emit PaymentRecorded(refA, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
 
-        _record(REF_A, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        _record(payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
     }
 
     function test_recordPayment_revertsOnDuplicateRefId() public {
-        _record(REF_A, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        bytes32 refA = _record(payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
 
-        vm.expectRevert(abi.encodeWithSelector(SettlementProofs.DuplicateRefId.selector, REF_A));
-        _record(REF_A, payee2, 1, PAID_AT_A, keccak256("other"), "retry");
+        vm.expectRevert(abi.encodeWithSelector(SettlementProofs.DuplicateRefId.selector, refA));
+        vm.prank(recorder);
+        proofs.recordPayment(refA, payee, AMOUNT_A, PAID_AT_A, SRC_A, "replay");
+        assertEq(proofs.proofCount(), 1);
+    }
+
+    function test_recordPayment_revertsWhenRefIdDoesNotMatchPayload() public {
+        bytes32 expected = proofs.canonicalRefId(SRC_A, payee, AMOUNT_A);
+        bytes32 wrong = keccak256("unbound-ref");
+        vm.expectRevert(abi.encodeWithSelector(SettlementProofs.RefIdMismatch.selector, wrong, expected));
+        vm.prank(recorder);
+        proofs.recordPayment(wrong, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        assertEq(proofs.proofCount(), 0);
+    }
+
+    /// A second id for the same payment is not a new settlement. It fails the
+    /// binding check, so the original proof is unchanged.
+    function test_recordPayment_rejectsReplayUnderAFreshRefId() public {
+        bytes32 refA = _record(payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        bytes32 fresh = keccak256("replay-new-id");
+        vm.expectRevert(abi.encodeWithSelector(SettlementProofs.RefIdMismatch.selector, fresh, refA));
+        vm.prank(recorder);
+        proofs.recordPayment(fresh, payee, AMOUNT_A, PAID_AT_A, SRC_A, "replay");
+
+        assertEq(proofs.proofCount(), 1);
+        assertEq(proofs.getProof(refA).memo, MEMO_A);
+        assertFalse(proofs.exists(fresh));
+    }
+
+    function test_payloadHash_bindsRefId() public view {
+        bytes32 src = 0x592d108234d07171b9dd3e43f0390ebbac989276bf53031522219e1ddfd8eb71;
+        address who = 0xfd689a93346AA40D2F38dC2ab6Eb436A57AA45c7;
+        uint256 amount = 12_500_000;
+        uint64 paidAt = 1_791_223_316;
+        bytes32 refId = 0x064a33b196b10c9f249165de66419d9daafb21616633ea15085d53e06d9dc14c;
+        bytes32 bound = 0xf98bb56636fb2c50fd25c1aff908af054bf7ddd29232fc4bf70c6de243d34970;
+
+        assertEq(proofs.canonicalRefId(src, who, amount), refId);
+        assertEq(proofs.payloadHash(refId, who, amount, paidAt, src), bound);
+        assertTrue(proofs.payloadHash(keccak256("other"), who, amount, paidAt, src) != bound);
     }
 
     function test_recordPayment_revertsZeroInputs() public {
@@ -134,9 +173,10 @@ contract SettlementProofsTest is Test {
         proofs.grantRole(recorderRole, extra);
         assertTrue(proofs.hasRole(recorderRole, extra));
 
-        bytes32 refB = keccak256("ref-b");
+        bytes32 srcB = keccak256("src-b");
+        bytes32 refB = proofs.canonicalRefId(srcB, payee, 1);
         vm.prank(extra);
-        proofs.recordPayment(refB, payee, 1, PAID_AT_A, keccak256("src-b"), "ok");
+        proofs.recordPayment(refB, payee, 1, PAID_AT_A, srcB, "ok");
 
         vm.prank(owner);
         proofs.revokeRole(recorderRole, extra);
@@ -162,20 +202,20 @@ contract SettlementProofsTest is Test {
     }
 
     function test_views_countTotalAndByPayee() public {
-        bytes32 refB = keccak256("ref-b");
         bytes32 srcB = keccak256("arc-tx-b");
         uint256 amountB = 4_000_000;
+        bytes32 srcC = keccak256("src-c");
 
-        _record(REF_A, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
-        _record(refB, payee, amountB, PAID_AT_A + 1, srcB, "second");
-        _record(keccak256("ref-c"), payee2, 500_000, PAID_AT_A + 2, keccak256("src-c"), "other");
+        bytes32 refA = _record(payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        bytes32 refB = _record(payee, amountB, PAID_AT_A + 1, srcB, "second");
+        _record(payee2, 500_000, PAID_AT_A + 2, srcC, "other");
 
         assertEq(proofs.proofCount(), 3);
         assertEq(proofs.totalSettled(), AMOUNT_A + amountB + 500_000);
 
         SettlementProofs.Proof[] memory forPayee = proofs.proofsByPayee(payee);
         assertEq(forPayee.length, 2);
-        assertEq(forPayee[0].refId, REF_A);
+        assertEq(forPayee[0].refId, refA);
         assertEq(forPayee[1].refId, refB);
         assertEq(forPayee[0].amountUSDC, AMOUNT_A);
         assertEq(forPayee[1].amountUSDC, amountB);
@@ -189,7 +229,7 @@ contract SettlementProofsTest is Test {
 
         SettlementProofs.Proof memory at0 = proofs.getProofAt(0);
         SettlementProofs.Proof memory at2 = proofs.getProofAt(2);
-        assertEq(at0.refId, REF_A);
+        assertEq(at0.refId, refA);
         assertEq(at2.payee, payee2);
     }
 
@@ -204,7 +244,7 @@ contract SettlementProofsTest is Test {
     }
 
     function test_appendOnly_noAdminOverrideOfRecordedEntry() public {
-        _record(REF_A, payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
+        bytes32 refA = _record(payee, AMOUNT_A, PAID_AT_A, SRC_A, MEMO_A);
 
         vm.prank(owner);
         vm.expectRevert(
@@ -212,9 +252,9 @@ contract SettlementProofsTest is Test {
                 IAccessControl.AccessControlUnauthorizedAccount.selector, owner, recorderRole
             )
         );
-        proofs.recordPayment(REF_A, payee2, 99, PAID_AT_A, keccak256("hijack"), "override");
+        proofs.recordPayment(refA, payee2, 99, PAID_AT_A, keccak256("hijack"), "override");
 
-        SettlementProofs.Proof memory p = proofs.getProof(REF_A);
+        SettlementProofs.Proof memory p = proofs.getProof(refA);
         assertEq(p.payee, payee);
         assertEq(p.amountUSDC, AMOUNT_A);
         assertEq(p.memo, MEMO_A);

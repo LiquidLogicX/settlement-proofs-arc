@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ProofFieldList } from "@/components/proof-details";
+import { LegacyRefBadge, ProofFieldList } from "@/components/proof-details";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import { SiteChrome } from "@/components/site-chrome";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatUsdc, getNetwork, parseNetworkId } from "@/lib/config";
 import { paymentOf } from "@/lib/payments";
 import { networkTabTitle } from "@/lib/tab-title";
-import { fetchProofByRefId, isSelfTestMemo, isTempoSyntheticSelfTest, selfTestBadgeLabel } from "@/lib/proofs";
+import {
+  fetchProofByRefId,
+  isSelfTestMemo,
+  isTempoSyntheticSelfTest,
+  selfTestBadgeLabel,
+  type LedgerProof,
+} from "@/lib/proofs";
 
 export const dynamic = "force-dynamic";
 
@@ -34,15 +40,21 @@ export default async function ProofDetailPage({ params, searchParams }: PageProp
   }
 
   let error: string | null = null;
-  let proof: Awaited<ReturnType<typeof fetchProofByRefId>> = null;
+  let rejected: string | null = null;
+  let proof: LedgerProof | null = null;
 
   try {
-    proof = await fetchProofByRefId(rawRefId, networkId);
+    const loaded = await fetchProofByRefId(rawRefId, networkId);
+    if (loaded.status === "rejected") {
+      rejected = loaded.message;
+    } else if (loaded.status === "found") {
+      proof = loaded.proof;
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
 
-  if (!error && !proof) {
+  if (!error && !rejected && !proof) {
     notFound();
   }
 
@@ -76,6 +88,15 @@ export default async function ProofDetailPage({ params, searchParams }: PageProp
         </Card>
       ) : null}
 
+      {rejected ? (
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardHeader>
+            <CardTitle className="text-lg text-foreground">Rejected</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">{rejected}</CardContent>
+        </Card>
+      ) : null}
+
       {proof ? (
         <Card className="border-border bg-card">
           <CardHeader>
@@ -88,6 +109,7 @@ export default async function ProofDetailPage({ params, searchParams }: PageProp
                   {selfTestBadgeLabel(networkId)}
                 </Badge>
               ) : null}
+              <LegacyRefBadge legacy={proof?.legacy} />
             </div>
             {isTempoSyntheticSelfTest({ networkId, selfTest, refId: proof.refId }) ? (
               <p className="mb-3 text-sm text-llx-selftest-text">

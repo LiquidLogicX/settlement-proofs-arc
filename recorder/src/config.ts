@@ -48,6 +48,8 @@ export type TempoRailConfig = {
   minFeeBalance: bigint;
   /** Only true when TEMPO_ALLOW_MAINNET=true. Mainnet chain 4217 is refused otherwise. */
   allowMainnet: boolean;
+  /** True only when TEMPO_ALLOWED_TOKENS is set. Mainnet refuses the Moderato default. */
+  allowedTokensConfigured: boolean;
 };
 
 export type AppConfig = {
@@ -163,6 +165,15 @@ function loadTempo(env: Env): TempoRailConfig | null {
   if (!isAddress(feeTokenRaw, { strict: false })) {
     throw new Error("TEMPO_FEE_TOKEN must be a TIP-20 token address");
   }
+  const allowedTokensRaw = value(env, "TEMPO_ALLOWED_TOKENS");
+  const allowMainnet = value(env, "TEMPO_ALLOW_MAINNET") === "true";
+  // Fail before any RPC call: mainnet mode must name its tokens. The chain-id
+  // check in createTempoRail repeats this once the RPC reports chain 4217.
+  if (allowMainnet && !allowedTokensRaw) {
+    throw new Error(
+      "Tempo mainnet (chain 4217) requires TEMPO_ALLOWED_TOKENS. Refusing to start with the Moderato default token list.",
+    );
+  }
   return {
     rpcUrl: value(env, "TEMPO_RPC_URL") ?? TEMPO_MODERATO_RPC,
     explorer: (value(env, "TEMPO_EXPLORER") ?? TEMPO_MODERATO_EXPLORER).replace(/\/+$/, ""),
@@ -174,9 +185,10 @@ function loadTempo(env: Env): TempoRailConfig | null {
     // Tempo finality is deterministic (Simplex BFT): one block is final.
     minConfirmations: Math.max(1, Number(env.TEMPO_MIN_CONFIRMATIONS ?? "1")),
     feeToken: feeTokenRaw as Address,
-    tokens: parseTempoTokens(env.TEMPO_ALLOWED_TOKENS),
+    tokens: parseTempoTokens(allowedTokensRaw),
     minFeeBalance: parseMinFeeBalance(env.TEMPO_MIN_RECORDER_FEE_BALANCE),
-    allowMainnet: value(env, "TEMPO_ALLOW_MAINNET") === "true",
+    allowMainnet,
+    allowedTokensConfigured: Boolean(allowedTokensRaw),
   };
 }
 

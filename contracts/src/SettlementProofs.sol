@@ -11,6 +11,12 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 ///      never Arc native gas wei (18 decimals). Payee is cleartext (Decision 2B).
 ///      Owner (DEFAULT_ADMIN_ROLE) may grant/revoke RECORDER_ROLE only and cannot
 ///      write proofs. Recorded entries cannot be edited, deleted, or overridden.
+///      `refId` is bound to the payment. It must equal
+///      `canonicalRefId(srcTxHash, payee, amountUSDC)`, which is also a field of
+///      `payloadHash`. A second record with that refId reverts (replay).
+///      This binding is enforced by this source. Registries deployed before it
+///      was added still accept any unique refId; the recorder enforces the
+///      binding until those registries are redeployed.
 ///      No Circle x402 / Arc settlement rail in this registry path (1B is out of scope).
 contract SettlementProofs is AccessControl {
     bytes32 public constant RECORDER_ROLE = keccak256("RECORDER_ROLE");
@@ -31,6 +37,7 @@ contract SettlementProofs is AccessControl {
     error ZeroAmount();
     error ZeroSrcTxHash();
     error DuplicateRefId(bytes32 refId);
+    error RefIdMismatch(bytes32 refId, bytes32 expected);
     error ProofNotFound(bytes32 refId);
     error IndexOutOfBounds(uint256 index, uint256 length);
 
@@ -55,7 +62,29 @@ contract SettlementProofs is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, owner);
     }
 
+    /// @notice Payment-bound id: `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`.
+    function canonicalRefId(bytes32 srcTxHash, address payee, uint256 amountUSDC)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC));
+    }
+
+    /// @notice Hash of the settlement payload. `refId` is an encoded field, so a
+    ///         different id cannot reuse this hash.
+    function payloadHash(
+        bytes32 refId,
+        address payee,
+        uint256 amountUSDC,
+        uint64 paidAt,
+        bytes32 srcTxHash
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(refId, payee, amountUSDC, paidAt, srcTxHash));
+    }
+
     /// @notice Record one immutable settlement proof. Only RECORDER_ROLE.
+    /// @param refId Must equal `canonicalRefId(srcTxHash, payee, amountUSDC)`.
     /// @param payee Cleartext recipient of the Base USDC transfer (public).
     /// @param amountUSDC Amount in 6-decimal ERC-20 USDC units (not native 18-dec wei).
     /// @param srcTxHash Base payment transaction hash (public).
@@ -71,6 +100,8 @@ contract SettlementProofs is AccessControl {
         if (payee == address(0)) revert ZeroPayee();
         if (amountUSDC == 0) revert ZeroAmount();
         if (srcTxHash == bytes32(0)) revert ZeroSrcTxHash();
+        bytes32 expected = canonicalRefId(srcTxHash, payee, amountUSDC);
+        if (refId != expected) revert RefIdMismatch(refId, expected);
         if (_recorded[refId]) revert DuplicateRefId(refId);
 
         Proof memory proof = Proof({

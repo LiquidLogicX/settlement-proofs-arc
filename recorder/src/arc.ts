@@ -6,10 +6,9 @@ import {
   createPublicClient,
   createWalletClient,
   defineChain,
-  encodePacked,
   http,
-  keccak256,
 } from "viem";
+import { canonicalRefId } from "./settlement-ref.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { settlementProofsAbi } from "./abi.js";
 import {
@@ -73,9 +72,7 @@ export function deriveRefId(
   payee: Address,
   amountUSDC: Erc20UsdcAmount,
 ): Hex {
-  return keccak256(
-    encodePacked(["bytes32", "address", "uint256"], [srcTxHash, payee, amountUSDC]),
-  );
+  return canonicalRefId(srcTxHash, payee, amountUSDC);
 }
 
 export function serializeProof(proof: Proof) {

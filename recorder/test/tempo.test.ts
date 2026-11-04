@@ -7,9 +7,11 @@ import { type Address, type Hex, encodeAbiParameters, keccak256, pad, stringToHe
 import { parseErc20UsdcAmount } from "../src/decimals.js";
 import {
   PATH_USD,
+  TEMPO_MAINNET_CHAIN_ID,
   TEMPO_TESTNET_STABLECOINS,
   describeTransferMemo,
   matchTip20Transfer,
+  assertTempoMainnetStartup,
   parseMinFeeBalance,
   parseTempoTokens,
   toAllowlist,
@@ -209,6 +211,32 @@ describe("Tempo helpers", () => {
     assert.equal(list.size, 1);
     assert.throws(() => parseTempoTokens("nope"));
     assert.throws(() => parseTempoTokens("0x123:Bad"));
+  });
+
+  it("refuses Tempo mainnet startup without an explicit token allowlist", () => {
+    assert.throws(
+      () =>
+        assertTempoMainnetStartup({
+          chainId: TEMPO_MAINNET_CHAIN_ID,
+          allowMainnet: true,
+          allowedTokensConfigured: false,
+        }),
+      /TEMPO_ALLOWED_TOKENS/,
+    );
+    assert.doesNotThrow(() =>
+      assertTempoMainnetStartup({
+        chainId: TEMPO_MAINNET_CHAIN_ID,
+        allowMainnet: true,
+        allowedTokensConfigured: true,
+      }),
+    );
+    assert.doesNotThrow(() =>
+      assertTempoMainnetStartup({
+        chainId: 42431,
+        allowMainnet: false,
+        allowedTokensConfigured: false,
+      }),
+    );
   });
 
   it("parseMinFeeBalance", () => {

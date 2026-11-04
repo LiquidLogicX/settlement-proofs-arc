@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ProofFieldList } from "@/components/proof-details";
+import { LegacyRefBadge, ProofFieldList } from "@/components/proof-details";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import { paymentOf } from "@/lib/payments";
 import {
@@ -207,6 +207,18 @@ export function Verifier({
         </Card>
       ) : null}
 
+      {result?.status === "rejected" ? (
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardHeader>
+            <CardTitle className="text-lg text-foreground">Rejected</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>{result.message}</p>
+            <p className="break-all font-mono text-xs text-llx-mono">{result.query}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {result?.status === "not_found" ? (
         <Card className="border-dashed border-border bg-card">
           <CardHeader>
@@ -254,6 +266,7 @@ function FoundProof({
               {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
+          <LegacyRefBadge legacy={proof.legacy} />
           <span className="text-xs text-muted-foreground">{KIND_LABEL[queryKind]}</span>
         </div>
         {isTempoSyntheticSelfTest({ networkId, selfTest, refId: proof.refId }) ? (

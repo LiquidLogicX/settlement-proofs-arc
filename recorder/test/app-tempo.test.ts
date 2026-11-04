@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Address, Hex } from "viem";
-import { createApp, resolveRailId } from "../src/app.js";
+import { apiKeysMatch, createApp, resolveRailId } from "../src/app.js";
 import { deriveRefId, type Proof } from "../src/arc.js";
 import { loadConfig } from "../src/config.js";
 import { parseErc20UsdcAmount, type Erc20UsdcAmount } from "../src/decimals.js";
@@ -28,6 +28,9 @@ function fakeTempoRail(opts: { lowGas?: boolean; amountOnChain?: bigint } = {}) 
     minConfirmations: 1,
     async readProof(refId) {
       return store.get(refId.toLowerCase()) ?? null;
+    },
+    async listProofs() {
+      return [...store.values()];
     },
     async verifyPayment({ amountUSDC }): Promise<VerifiedPayment> {
       const onChain = opts.amountOnChain ?? 12_500_000n;
@@ -127,6 +130,145 @@ describe("POST /v1/tempo/proofs — Tempo payment in, Tempo proof out", () => {
     assert.equal(json.proof.memo, "eip155:42431/AlphaUSD INV-2026-1001");
   });
 
+  it("rejects a refId that does not match the hashed payload", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", {
+      ...body,
+      refId: `0x${"11".repeat(32)}`,
+    });
+    assert.equal(res.status, 400);
+    assert.equal(((await res.json()) as { code: string }).code, "REF_MISMATCH");
+    assert.equal(writes.length, 0);
+  });
+
+  it("rejects a replay of the same payment under a new refId", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const a = app({ tempo: rail });
+    assert.equal((await post(a, "/v1/tempo/proofs", body)).status, 201);
+    const replay = await post(a, "/v1/tempo/proofs", { ...body, refId: `0x${"11".repeat(32)}` });
+    assert.equal(replay.status, 400);
+    assert.equal(((await replay.json()) as { code: string }).code, "REF_MISMATCH");
+    assert.equal(writes.length, 1);
+  });
+
+  it("writes paidAt from the payment block and ignores a client timestamp", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", { ...body, paidAt: 1 });
+    assert.equal(res.status, 201);
+    const json = (await res.json()) as { proof: { paidAt: number } };
+    assert.equal(json.proof.paidAt, 1_791_223_316);
+    assert.equal(writes[0]?.paidAt, 1_791_223_316);
+  });
+
+  it("refuses a second record when the payment is already indexed under a legacy refId", async () => {
+    const { rail, store, writes } = fakeTempoRail();
+    const legacy = `0x${"ab".repeat(32)}` as Hex;
+    store.set(legacy, {
+      refId: legacy,
+      payee: PAYEE,
+      amountUSDC: parseErc20UsdcAmount("12500000"),
+      paidAt: 1_791_223_316,
+      srcTxHash: PAY_TX,
+      memo: "caller-chosen",
+      recordedAt: 1,
+    });
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", body);
+    assert.equal(res.status, 409);
+    assert.equal(((await res.json()) as { code: string }).code, "REF_REUSED");
+    assert.equal(writes.length, 0);
+  });
+
+  it("lookup returns a legacy indexed proof for the same payment", async () => {
+    const { rail, store } = fakeTempoRail();
+    const legacy = `0x${"cd".repeat(32)}` as Hex;
+    store.set(legacy, {
+      refId: legacy,
+      payee: PAYEE,
+      amountUSDC: parseErc20UsdcAmount("12500000"),
+      paidAt: 1_791_223_316,
+      srcTxHash: PAY_TX,
+      memo: "caller-chosen",
+      recordedAt: 1,
+    });
+    const res = await app({ tempo: rail }).request(
+      `/v1/proofs/lookup?chain=tempo&txHash=${PAY_TX}&payee=${PAYEE}&amountUSDC=12500000`,
+      { headers: { "x-api-key": KEY } },
+    );
+    assert.equal(res.status, 200);
+    const json = (await res.json()) as { found: boolean; legacy: boolean; proof: { refId: string } };
+    assert.equal(json.found, true);
+    assert.equal(json.legacy, true);
+    assert.equal(json.proof.refId, legacy);
+  });
+
+  it("lookup of the derived id is REF_REUSED when an older row already settled that payment", async () => {
+    const { rail, store } = fakeTempoRail();
+    const legacy = `0x${"cd".repeat(32)}` as Hex;
+    const canonical = deriveRefId(PAY_TX, PAYEE, parseErc20UsdcAmount("12500000"));
+    store.set(legacy, {
+      refId: legacy,
+      payee: PAYEE,
+      amountUSDC: parseErc20UsdcAmount("12500000"),
+      paidAt: 1_791_223_316,
+      srcTxHash: PAY_TX,
+      memo: "caller-chosen",
+      recordedAt: 1,
+    });
+    store.set(canonical.toLowerCase(), {
+      refId: canonical,
+      payee: PAYEE,
+      amountUSDC: parseErc20UsdcAmount("12500000"),
+      paidAt: 1_791_223_316,
+      srcTxHash: PAY_TX,
+      memo: "eip155:42431/AlphaUSD later",
+      recordedAt: 2,
+    });
+    const res = await app({ tempo: rail }).request(
+      `/v1/proofs/lookup?chain=tempo&refId=${canonical}`,
+      { headers: { authorization: `Bearer ${KEY}` } },
+    );
+    assert.equal(res.status, 409);
+    assert.equal(((await res.json()) as { code: string }).code, "REF_REUSED");
+  });
+
+  it("refuses to write when the proof index cannot be read", async () => {
+    const { rail, writes } = fakeTempoRail();
+    rail.listProofs = async () => {
+      throw new Error("rpc down");
+    };
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", body);
+    assert.equal(res.status, 503);
+    assert.equal(((await res.json()) as { code: string }).code, "REGISTRY_READ_FAILED");
+    assert.equal(writes.length, 0);
+  });
+
+  it("accepts an explicit refId that matches the payload", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const refId = deriveRefId(PAY_TX, PAYEE, parseErc20UsdcAmount("12500000"));
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", { ...body, refId });
+    assert.equal(res.status, 201);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0]?.refId, refId);
+  });
+
+  it("rejects a stored proof whose refId is not bound to its payload", async () => {
+    const { rail, store, writes } = fakeTempoRail();
+    const refId = deriveRefId(PAY_TX, PAYEE, parseErc20UsdcAmount("12500000"));
+    store.set(refId.toLowerCase(), {
+      refId,
+      payee: PAYEE,
+      amountUSDC: parseErc20UsdcAmount("12500000"),
+      paidAt: 1,
+      srcTxHash: `0x${"22".repeat(32)}`,
+      memo: "unbound",
+      recordedAt: 1,
+    });
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", body);
+    assert.equal(res.status, 409);
+    assert.equal(((await res.json()) as { code: string }).code, "REF_MISMATCH");
+    assert.equal(writes.length, 0);
+  });
+
   it("same payment twice → 200 idempotent, no second write", async () => {
     const { rail, writes } = fakeTempoRail();
     const a = app({ tempo: rail });
@@ -155,6 +297,10 @@ describe("POST /v1/tempo/proofs — Tempo payment in, Tempo proof out", () => {
   it("requires the API key", async () => {
     const { rail } = fakeTempoRail();
     assert.equal((await post(app({ tempo: rail }), "/v1/tempo/proofs", body, "nope")).status, 401);
+    assert.equal((await post(app({ tempo: rail }), "/v1/tempo/proofs", body, "test-kez")).status, 401);
+    assert.equal(apiKeysMatch(KEY, KEY), true);
+    assert.equal(apiKeysMatch("test-kez", KEY), false);
+    assert.equal(apiKeysMatch(undefined, KEY), false);
   });
 
   it("POST /v1/proofs with chain=tempo is equivalent", async () => {
@@ -266,7 +412,20 @@ describe("loadConfig rails", () => {
     assert.equal(cfg.tempo.rpcUrl, "https://rpc.moderato.tempo.xyz");
     assert.equal(cfg.tempo.minConfirmations, 1);
     assert.equal(cfg.tempo.allowMainnet, false);
+    assert.equal(cfg.tempo.allowedTokensConfigured, false);
     assert.equal(cfg.tempo.tokens.size, 4);
+  });
+
+  it("refuses Tempo mainnet mode unless TEMPO_ALLOWED_TOKENS is set", () => {
+    assert.throws(
+      () =>
+        loadConfig({
+          ...tempoEnv,
+          TEMPO_ALLOW_MAINNET: "true",
+          TEMPO_RPC_URL: "https://rpc.tempo.xyz",
+        }),
+      /TEMPO_ALLOWED_TOKENS/,
+    );
   });
 
   it("both rails together", () => {
@@ -292,6 +451,7 @@ describe("loadConfig rails", () => {
     assert.deepEqual(both.arc, arcOnly.arc);
     assert.ok(both.tempo);
     assert.equal(both.tempo.allowMainnet, true);
+    assert.equal(both.tempo.allowedTokensConfigured, true);
     assert.equal(both.tempo.rpcUrl, "https://rpc.tempo.xyz");
     assert.equal(both.tempo.feeToken, "0x20C000000000000000000000b9537d11c60E8b50");
     assert.equal(both.tempo.tokens.get("0x20c000000000000000000000b9537d11c60e8b50")?.symbol, "USDC.e");

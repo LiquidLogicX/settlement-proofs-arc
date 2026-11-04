@@ -9,6 +9,7 @@ import {
 } from "viem";
 import { settlementProofsAbi } from "./abi";
 import { mapLimit, resolvePayment, type PaymentInfo } from "./payments";
+import { isLegacySettlementRef, ledgerRows, type SettlementRefCode } from "./settlement-ref";
 import {
   getNetwork,
   getPublicConfig,
@@ -36,6 +37,11 @@ export type LedgerProof = {
   proofTxHash: Hex | null;
   /** Payment chain + independent on-chain re-check (payer, token). Null if not resolved. */
   payment: PaymentInfo | null;
+  /**
+   * Caller-chosen refId from before ids were derived from the payment.
+   * The row stays on the ledger; on-chain totals already include it.
+   */
+  legacy: boolean;
 };
 
 export type LedgerSnapshot = {
@@ -57,6 +63,7 @@ export type ProofQueryKind = "refId" | "arcTx" | "srcTxHash";
 export type ProofLookupResult =
   | { status: "invalid"; message: string }
   | { status: "not_found"; message: string; query: Hex }
+  | { status: "rejected"; code: SettlementRefCode; message: string; query: Hex }
   | {
       status: "found";
       query: Hex;
@@ -68,6 +75,7 @@ export type ProofLookupResult =
 export type SerializedLookupResult =
   | { status: "invalid"; message: string }
   | { status: "not_found"; message: string; query: Hex }
+  | { status: "rejected"; code: SettlementRefCode; message: string; query: Hex }
   | {
       status: "found";
       query: Hex;
@@ -226,7 +234,7 @@ function requireRegistryContext(networkId: NetworkId = "arc"): RegistryContext {
 }
 
 function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
-  return {
+  const proof: LedgerProof = {
     refId: raw.refId,
     payee: raw.payee,
     amountUSDC: raw.amountUSDC,
@@ -236,7 +244,9 @@ function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
     recordedAt: Number(raw.recordedAt),
     proofTxHash,
     payment: null,
+    legacy: false,
   };
+  return { ...proof, legacy: isLegacySettlementRef(proof) };
 }
 
 /** Attach payment source + on-chain payment re-check (best effort, never throws). */
@@ -457,11 +467,11 @@ export async function fetchLedger(networkId: NetworkId = "arc"): Promise<LedgerS
     if (tx) proofTxByRef.set(key, tx);
   }
 
-  const proofs: LedgerProof[] = rawProofs
-    .map((proof) =>
+  const proofs: LedgerProof[] = ledgerRows(
+    rawProofs.map((proof) =>
       toLedgerProof(proof, proofTxByRef.get(proof.refId.toLowerCase()) ?? null),
-    )
-    .sort((a, b) => b.paidAt - a.paidAt || Number(b.recordedAt) - Number(a.recordedAt));
+    ),
+  ).sort((a, b) => b.paidAt - a.paidAt || Number(b.recordedAt) - Number(a.recordedAt));
 
   const enriched = await mapLimit(proofs, 4, (proof) => withPayment(proof, networkId));
   return { proofCount, totalSettled, proofs: enriched };
@@ -584,13 +594,18 @@ export async function lookupProof(
   };
 }
 
-/** Fetch a single proof by refId for the detail page. Returns null if missing. */
+export type FetchedProof =
+  | { status: "found"; proof: LedgerProof }
+  | { status: "rejected"; code: SettlementRefCode; message: string }
+  | { status: "not_found" };
+
+/** Fetch a single proof by refId for the detail page. */
 export async function fetchProofByRefId(
   rawRefId: string,
   networkId: NetworkId = "arc",
-): Promise<LedgerProof | null> {
+): Promise<FetchedProof> {
   const refId = normalizeBytes32Query(rawRefId);
-  if (!refId) return null;
+  if (!refId) return { status: "not_found" };
 
   const { client, address, network } = requireRegistryContext(networkId);
   const exists = await client.readContract({
@@ -599,8 +614,9 @@ export async function fetchProofByRefId(
     functionName: "exists",
     args: [refId],
   });
-  if (!exists) return null;
-  return withPayment(await readProofByRef(client, address, refId, undefined, network), networkId);
+  if (!exists) return { status: "not_found" };
+  const proof = await withPayment(await readProofByRef(client, address, refId, undefined, network), networkId);
+  return { status: "found", proof };
 }
 
 
