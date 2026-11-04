@@ -29,7 +29,7 @@ Live today:
 Tempo is built for payments, and a settlement proof is payment paperwork. The fit is direct:
 
 - **Memos built in.** TIP-20 `transferWithMemo` carries a 32-byte reference (an invoice number, a payout ID) in the payment itself. Our recorder reads it and keeps it in the proof, so reconciliation needs no side channel.
-- **Deterministic, sub-second finality.** One confirmation is final, so a proof can be written seconds after the payment with no reorg window. (On Base we wait 12 confirmations.)
+- **Deterministic, sub-second finality.** One confirmation is final, so a proof can be written seconds after the payment with no reorg window. (On Base we wait 60 seconds, and at least 300 confirmations after the 200ms Denim slot.)
 - **Stablecoin-native fees.** The recorder pays its fees in a stablecoin (pathUSD on testnet, USDC.e on mainnet). There's no gas token to manage, and our cost per proof is a stable, predictable number.
 - **Payment and proof on one chain.** On Tempo, the payment and its notarization sit side by side, readable over one RPC. That makes the independent check cheap and simple.
 - **Multiple stablecoins.** One registry handles pathUSD, AlphaUSD, BetaUSD, ThetaUSD (allowlisted), and every proof shows which token moved.

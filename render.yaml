@@ -22,8 +22,12 @@ services:
         sync: false
       - key: RECORDER_API_KEY
         sync: false
+      # Base Denim (2026-11-05 18:00 UTC) is a 200ms slot. 300 blocks ≈ 60s.
+      # Age gate is MIN_CONFIRMATION_SECONDS (or the safe head). Do not set 12.
       - key: MIN_CONFIRMATIONS
-        value: "12"
+        value: "300"
+      - key: MIN_CONFIRMATION_SECONDS
+        value: "60"
       # --- Tempo rail (Tempo payment → Tempo proof). Names only; Miles pastes secrets in Render UI.
       # See docs/render-tempo-env.md. Leave TEMPO_* unset until Miles enables the rail.
       - key: TEMPO_SETTLEMENT_PROOFS_ADDRESS

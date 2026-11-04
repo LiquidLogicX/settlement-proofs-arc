@@ -345,8 +345,14 @@ export function createApp(deps: AppDeps) {
       const status = (err as { status?: number }).status ?? 500;
       const code = (err as { code?: string }).code;
       const message = err instanceof Error ? err.message : String(err);
+      const retryAfterSeconds = (err as { retryAfterSeconds?: unknown }).retryAfterSeconds;
       console.error(JSON.stringify({ msg: "record proof failed", rail: rail.id, code, message }));
-      return c.json({ error: message, code }, status as 400);
+      const body: { error: string; code?: string; retryAfterSeconds?: number } = { error: message, code };
+      if (typeof retryAfterSeconds === "number" && Number.isFinite(retryAfterSeconds)) {
+        body.retryAfterSeconds = retryAfterSeconds;
+        c.header("Retry-After", String(Math.ceil(retryAfterSeconds)));
+      }
+      return c.json(body, status as 400);
     }
   }
 
