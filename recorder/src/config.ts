@@ -24,6 +24,11 @@ export type ArcRailConfig = {
   settlementProofsAddress: Address;
   recorderPrivateKey: Hex;
   minConfirmations: number;
+  /**
+   * Minimum age of the Base payment block, in seconds (head.timestamp − tx.timestamp).
+   * Waived when the tx block is at or below the `safe` head. See MIN_CONFIRMATION_SECONDS.
+   */
+  minConfirmationSeconds: number;
   /** Refuse Arc writes below this native gas balance (18-dec wei). */
   minRecorderGasWei: bigint;
 };
@@ -118,6 +123,16 @@ function rejectBannedEnv(env: Env) {
   }
 }
 
+/** Blank env falls back to `fallback`. Rejects non-integers so a typo cannot disable the finality gate. */
+function parseCount(raw: string | undefined, fallback: number, name: string, min: number): number {
+  const text = raw?.trim();
+  const n = text ? Number(text) : fallback;
+  if (!Number.isInteger(n) || n < min) {
+    throw new Error(`${name} must be an integer >= ${min}`);
+  }
+  return n;
+}
+
 function loadArc(env: Env): ArcRailConfig | null {
   if (!ARC_VARS.some((name) => value(env, name))) return null;
   const ctx = "Base→Arc rail";
@@ -129,9 +144,16 @@ function loadArc(env: Env): ArcRailConfig | null {
       required(env, "SETTLEMENT_RECORDER_PRIVATE_KEY", ctx),
       "SETTLEMENT_RECORDER_PRIVATE_KEY",
     ),
-    // Default 12: Base mainnet reorg depth; avoid recording proofs that can be
-    // orphaned by a shallow reorganization of recent blocks.
-    minConfirmations: Math.max(1, Number(env.MIN_CONFIRMATIONS ?? "12")),
+    // Base Denim (2026-11-05 18:00 UTC) drops the slot from 2s to 200ms.
+    // 300 confirmations is 60s at the new slot time — a floor, not the whole gate.
+    // Age is MIN_CONFIRMATION_SECONDS (or the safe head). See base.ts.
+    minConfirmations: parseCount(env.MIN_CONFIRMATIONS, 300, "MIN_CONFIRMATIONS", 1),
+    minConfirmationSeconds: parseCount(
+      env.MIN_CONFIRMATION_SECONDS,
+      60,
+      "MIN_CONFIRMATION_SECONDS",
+      0,
+    ),
     minRecorderGasWei: parseMinGasWei(env.MIN_RECORDER_GAS_WEI),
   };
 }

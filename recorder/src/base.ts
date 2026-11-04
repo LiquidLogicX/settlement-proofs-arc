@@ -34,17 +34,94 @@ export function createBaseClient(rpcUrl: string) {
   });
 }
 
+/** Base slot time after the Denim upgrade (2026-11-05 18:00 UTC). Not the pre-Denim 2s slot. */
+export const BASE_SLOT_MS = 200;
+
+export type BaseBlockRef = { number: bigint; timestamp: bigint };
+
+/** Narrow Base read surface so verifyBasePayment can be tested without a live RPC. */
+export type BasePaymentReader = {
+  getTransactionReceipt: (args: { hash: Hex }) => Promise<{
+    status: "success" | "reverted";
+    blockNumber: bigint;
+    logs: readonly { address: Address; topics: readonly Hex[] | Hex[]; data: Hex }[];
+  }>;
+  getBlock: (args: { blockNumber: bigint } | { blockTag: "latest" }) => Promise<BaseBlockRef>;
+  /** `eth_getBlockByNumber("safe")` block number, or null when the tag is unavailable. */
+  getSafeBlockNumber: () => Promise<bigint | null>;
+};
+
+export function basePaymentReader(client: ReturnType<typeof createBaseClient>): BasePaymentReader {
+  return {
+    getTransactionReceipt: (args) => client.getTransactionReceipt(args),
+    async getBlock(args) {
+      const block =
+        "blockNumber" in args
+          ? await client.getBlock({ blockNumber: args.blockNumber })
+          : await client.getBlock({ blockTag: "latest" });
+      if (block.number == null) {
+        throw Object.assign(new Error("Base block has no number"), {
+          status: 503,
+          code: "BASE_RPC_UNAVAILABLE",
+        });
+      }
+      return { number: block.number, timestamp: block.timestamp };
+    },
+    async getSafeBlockNumber() {
+      try {
+        const block = await client.getBlock({ blockTag: "safe" });
+        return block.number ?? null;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+/**
+ * Seconds to wait before retrying a Base payment that is not final yet.
+ *
+ * The binding wait is the time gate (`MIN_CONFIRMATION_SECONDS - elapsed`), waived
+ * when the tx is already at or below the safe head. A block-floor deficit is
+ * converted at the post-Denim 200ms slot — never at the old 2s block time
+ * (`blocksShort * 2`). Callers should use the max of the two.
+ */
+export function baseRetryAfterSeconds(args: {
+  elapsedSeconds: number;
+  minConfirmationSeconds: number;
+  confirmations: number;
+  minConfirmations: number;
+  /** True when the tx block is already included in the safe head. */
+  timeGateWaived: boolean;
+}): number {
+  const elapsed = Number.isFinite(args.elapsedSeconds) ? Math.max(0, args.elapsedSeconds) : 0;
+  const timeLeft = args.timeGateWaived ? 0 : Math.max(0, Math.ceil(args.minConfirmationSeconds - elapsed));
+  const blocksLeft = Math.max(0, args.minConfirmations - args.confirmations);
+  const blockLeftSeconds = Math.ceil((blocksLeft * BASE_SLOT_MS) / 1000);
+  return Math.max(timeLeft, blockLeftSeconds);
+}
+
 /**
  * Verify a Base USDC ERC-20 Transfer for the claimed srcTxHash (1A notarize).
  * Unmatched amounts are always rejected — no ALLOW_UNVERIFIED_AMOUNT path.
  * Uses Base JSON-RPC only (receipts / logs). No explorer HTTP API.
+ *
+ * Finality (Base Denim, 200ms slots as of 2026-11-05 18:00 UTC):
+ *   confirmations >= MIN_CONFIRMATIONS (default 300)
+ *   AND (
+ *     head.timestamp - tx.timestamp >= MIN_CONFIRMATION_SECONDS (default 60)
+ *     OR tx.blockNumber <= eth_getBlockByNumber("safe")
+ *   )
+ * Not-yet-final responses are 400 TX_NOT_CONFIRMED with retryAfterSeconds.
  */
 export async function verifyBasePayment(args: {
-  client: ReturnType<typeof createBaseClient>;
+  client: BasePaymentReader;
   txHash: Hex;
   payee: Address;
   amountUSDC: Erc20UsdcAmount;
   minConfirmations: number;
+  /** Head timestamp must be at least this many seconds after the tx block, unless the tx is safe. */
+  minConfirmationSeconds?: number;
   usdcAddress?: Address;
 }): Promise<BaseVerification> {
   const {
@@ -53,15 +130,25 @@ export async function verifyBasePayment(args: {
     payee,
     amountUSDC,
     minConfirmations,
+    minConfirmationSeconds = 60,
     usdcAddress = BASE_USDC,
   } = args;
 
   const receipt = await client.getTransactionReceipt({ hash: txHash }).catch(() => null);
   if (!receipt) {
-    throw Object.assign(new Error("Base transaction not found or not yet confirmed"), {
-      status: 400,
-      code: "TX_NOT_CONFIRMED",
+    const retryAfterSeconds = baseRetryAfterSeconds({
+      elapsedSeconds: 0,
+      minConfirmationSeconds,
+      confirmations: 0,
+      minConfirmations,
+      timeGateWaived: false,
     });
+    throw Object.assign(
+      new Error(
+        `Base transaction not found or not yet confirmed. Retry in ${retryAfterSeconds}s.`,
+      ),
+      { status: 400, code: "TX_NOT_CONFIRMED", retryAfterSeconds },
+    );
   }
 
   if (receipt.status !== "success") {
@@ -71,18 +158,33 @@ export async function verifyBasePayment(args: {
     });
   }
 
-  const head = await client.getBlockNumber();
-  const confirmations = head - receipt.blockNumber + 1n;
-  if (confirmations < BigInt(minConfirmations)) {
+  const [head, block, safeBlockNumber] = await Promise.all([
+    client.getBlock({ blockTag: "latest" }),
+    client.getBlock({ blockNumber: receipt.blockNumber }),
+    client.getSafeBlockNumber(),
+  ]);
+  const confirmations = head.number - receipt.blockNumber + 1n;
+  const elapsedSeconds = Number(head.timestamp - block.timestamp);
+  const onSafeHead = safeBlockNumber !== null && receipt.blockNumber <= safeBlockNumber;
+  const enoughBlocks = confirmations >= BigInt(minConfirmations);
+  const enoughTime = Number.isFinite(elapsedSeconds) && elapsedSeconds >= minConfirmationSeconds;
+  // Block floor always. Time gate or safe head — either finality signal is enough.
+  if (!enoughBlocks || !(enoughTime || onSafeHead)) {
+    const retryAfterSeconds = baseRetryAfterSeconds({
+      elapsedSeconds,
+      minConfirmationSeconds,
+      confirmations: Number(confirmations > 0n ? confirmations : 0n),
+      minConfirmations,
+      timeGateWaived: onSafeHead,
+    });
     throw Object.assign(
       new Error(
-        `Base transaction has ${confirmations} confirmation(s); need at least ${minConfirmations}`,
+        `Base transaction has ${confirmations} confirmation(s) and ${Number.isFinite(elapsedSeconds) ? elapsedSeconds : "unknown"}s of age; need at least ${minConfirmations} confirmation(s) and either ${minConfirmationSeconds}s or the safe head. Retry in ${retryAfterSeconds}s.`,
       ),
-      { status: 400, code: "TX_NOT_CONFIRMED" },
+      { status: 400, code: "TX_NOT_CONFIRMED", retryAfterSeconds },
     );
   }
 
-  const block = await client.getBlock({ blockNumber: receipt.blockNumber });
   const match = matchUsdcTransfer(receipt.logs, payee, amountUSDC, usdcAddress);
   if (!match.matched) {
     throw Object.assign(

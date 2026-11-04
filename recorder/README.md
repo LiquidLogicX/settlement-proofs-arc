@@ -137,7 +137,7 @@ Used by `audit.liquidlogicx.com/api/prove` for idempotency before it asks for a 
 
 ### Base USDC check (strict — no bypass)
 
-The service requires the Base tx to be **mined**, **successful**, and to have at least `MIN_CONFIRMATIONS` (**default 12**) confirmations.
+The service requires the Base tx to be **mined** and **successful**, with at least `MIN_CONFIRMATIONS` confirmations (**default 300**, a 60-second floor at Base's post-Denim 200ms slot) **and** either `MIN_CONFIRMATION_SECONDS` of block-timestamp age (**default 60**: `head.timestamp - txBlock.timestamp`) or a tx block at or below the `safe` head (`eth_getBlockByNumber("safe")`). A tx that is not final yet returns **400** `TX_NOT_CONFIRMED` with `retryAfterSeconds` (remaining seconds on the time gate, or the block deficit at 200ms per block — not the old 2-second slot).
 
 It then **requires** a matching `Transfer` from [USDC on Base](https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) to cleartext `payee` for `amountUSDC`. If the Transfer does not match, the request is **rejected with HTTP 400**. Nothing is written. There is **no** `ALLOW_UNVERIFIED_AMOUNT` / TxOnly path — Part 3 removed it for good.
 
@@ -176,7 +176,7 @@ Environment variables (sync: false / secret in the dashboard):
 - `SETTLEMENT_RECORDER_PRIVATE_KEY`
 - `RECORDER_API_KEY`
 
-Optional: `MIN_CONFIRMATIONS` (default `12`), `MIN_RECORDER_GAS_WEI` (default 0.05 native USDC in 18-dec wei), `HOST`.
+Optional: `MIN_CONFIRMATIONS` (default `300`), `MIN_CONFIRMATION_SECONDS` (default `60`), `MIN_RECORDER_GAS_WEI` (default 0.05 native USDC in 18-dec wei), `HOST`.
 
 To enable the Tempo rail on the same service, add `TEMPO_SETTLEMENT_PROOFS_ADDRESS` and `TEMPO_RECORDER_PRIVATE_KEY` (secret), plus any optional `TEMPO_*` overrides from `.env.example`. Without them the service runs Arc-only, exactly as before. `render.yaml` is intentionally unchanged so a Blueprint sync can't alter the live service; add the Tempo vars by hand in the dashboard when approved.
 

@@ -384,11 +384,25 @@ describe("loadConfig rails", () => {
     RECORDER_API_KEY: KEY,
   };
 
+  it("Base finality overrides", () => {
+    const cfg = loadConfig({ ...arcEnv, MIN_CONFIRMATIONS: "400", MIN_CONFIRMATION_SECONDS: "90" });
+    assert.equal(cfg.arc?.minConfirmations, 400);
+    assert.equal(cfg.arc?.minConfirmationSeconds, 90);
+  });
+
+  it("rejects a non-integer Base finality setting", () => {
+    assert.throws(
+      () => loadConfig({ ...arcEnv, MIN_CONFIRMATION_SECONDS: "soon" }),
+      /MIN_CONFIRMATION_SECONDS/,
+    );
+  });
+
   it("existing Arc-only env still loads unchanged", () => {
     const cfg = loadConfig(arcEnv);
     assert.ok(cfg.arc);
     assert.equal(cfg.tempo, null);
-    assert.equal(cfg.arc.minConfirmations, 12);
+    assert.equal(cfg.arc.minConfirmations, 300);
+    assert.equal(cfg.arc.minConfirmationSeconds, 60);
   });
 
   it("Tempo-only env loads with Moderato defaults", () => {

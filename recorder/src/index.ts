@@ -29,6 +29,7 @@ console.log(
       registryChainId: r.registry.chainId,
       paymentChainId: r.payment.chainId,
       minConfirmations: r.minConfirmations,
+      minConfirmationSeconds: r.minConfirmationSeconds,
     })),
     proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
     arcNativeGasDecimals: ARC_NATIVE_USDC_DECIMALS,
