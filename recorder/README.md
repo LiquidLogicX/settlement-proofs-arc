@@ -55,7 +55,7 @@ Rate limit on write: **30**/IP/minute → **429**.
 - `amountUSDC` — **integer** with **6** decimals (`1 USDC = 1000000`). Not Arc native 18-dec wei.
 - `memo` — optional string.
 - `paidAt` — optional unix seconds. If omitted, the Base block timestamp is used.
-- `refId` — optional `bytes32`. If omitted, derived as Solidity `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`.
+- `refId` — optional `bytes32`. If omitted, derived as Solidity `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`. If supplied, it must equal that hash (`400 REF_MISMATCH` otherwise). The id is bound into the settlement payload hash.
 
 Sample **201** response:
 

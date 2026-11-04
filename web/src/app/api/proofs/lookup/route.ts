@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   try {
     const result = await lookupProof(q, networkId);
     const status =
-      result.status === "invalid" ? 400 : result.status === "not_found" ? 404 : 200;
+      result.status === "invalid" ? 400 : result.status === "not_found" ? 404 : result.status === "rejected" ? 409 : 200;
     return NextResponse.json({ ...serializeLookup(result), network: networkId }, { status });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

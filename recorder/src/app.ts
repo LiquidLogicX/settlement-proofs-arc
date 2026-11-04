@@ -2,6 +2,7 @@
  * HTTP API (Hono). Pure wiring over `Rail`s so tests can inject fakes.
  *
  *   POST /v1/proofs            { chain?: "base"|"arc"|"tempo", txHash, payee, amountUSDC, memo?, refId?, paidAt? }
+ *   A supplied refId must equal keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC)).
  *   POST /v1/tempo/proofs      same body; chain forced to "tempo"
  *   GET  /v1/proofs/lookup     ?chain=&refId=  or  ?chain=&txHash=&payee=&amountUSDC=
  *   GET  /health
@@ -14,6 +15,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { type Address, type Hex, getAddress, isAddress, isHash, isHex } from "viem";
 import { deriveRefId, isDuplicateRefError, serializeProof, type Proof } from "./arc.js";
+import { settlementRefMessage, verifyRecordedProof, verifySettlementRef } from "./settlement-ref.js";
 import { type Erc20UsdcAmount, parseErc20UsdcAmount } from "./decimals.js";
 import { type HealthCacheOptions, createHealthCache } from "./health-cache.js";
 import type { Rail, RailId, VerifiedPayment } from "./rails.js";
@@ -281,11 +283,37 @@ export function createApp(deps: AppDeps) {
     if (noteError) return c.json({ error: noteError }, 400);
 
     const { txHash, payee, amountUSDC } = parsed;
-    const refId = parsed.refId ?? deriveRefId(txHash, payee, amountUSDC);
+    const expectedRefId = deriveRefId(txHash, payee, amountUSDC);
+    if (parsed.refId) {
+      const verdict = verifySettlementRef({
+        claimedRefId: parsed.refId,
+        payload: {
+          refId: expectedRefId,
+          payee,
+          amountUSDC,
+          paidAt: parsed.paidAt ?? 0,
+          srcTxHash: txHash,
+        },
+        usedRefIds: new Set(),
+      });
+      if (!verdict.ok) {
+        return c.json(
+          { error: "refId does not match the settlement payload hash", code: verdict.code },
+          400,
+        );
+      }
+    }
+    const refId = expectedRefId;
 
     try {
       const existing = await rail.readProof(refId);
       if (existing) {
+        if (!storedPayloadMatches(existing, { refId, txHash, payee, amountUSDC })) {
+          return c.json(
+            { error: "refId does not match the recorded settlement payload", code: "REF_MISMATCH" },
+            409,
+          );
+        }
         const loc = await proofLocation(rail, refId, existing.recordedAt);
         // Tempo reads are cheap (~0.5 s blocks, one RPC): re-check so the response carries payer/token.
         // Arc keeps its original idempotent path (no extra Base RPC calls).
@@ -315,7 +343,7 @@ export function createApp(deps: AppDeps) {
       } catch (err) {
         if (isDuplicateRefError(err)) {
           const raced = await rail.readProof(refId);
-          if (raced) {
+          if (raced && storedPayloadMatches(raced, { refId, txHash, payee, amountUSDC })) {
             const loc = await proofLocation(rail, refId, raced.recordedAt);
             return c.json(proofResponse(rail, raced, { idempotent: true, ...loc, payment }));
           }
@@ -386,6 +414,19 @@ export function createApp(deps: AppDeps) {
     try {
       const existing = await rail.readProof(refId);
       if (!existing) return c.json({ found: false, refId, rail: rail.id }, 404);
+      const verdict = verifyRecordedProof(
+        {
+          refId: existing.refId,
+          payee: existing.payee,
+          amountUSDC: existing.amountUSDC,
+          paidAt: existing.paidAt,
+          srcTxHash: existing.srcTxHash,
+        },
+        new Set(),
+      );
+      if (!verdict.ok) {
+        return c.json({ error: settlementRefMessage(verdict.code), code: verdict.code, refId }, 409);
+      }
       const loc = await proofLocation(rail, refId, existing.recordedAt);
       return c.json({ found: true, ...proofResponse(rail, existing, { idempotent: true, ...loc, payment: null }) });
     } catch (err) {
@@ -395,4 +436,27 @@ export function createApp(deps: AppDeps) {
   });
 
   return app;
+}
+
+function storedPayloadMatches(
+  existing: Proof,
+  args: { refId: Hex; txHash: Hex; payee: Address; amountUSDC: bigint },
+): boolean {
+  const verdict = verifyRecordedProof(
+    {
+      refId: existing.refId,
+      payee: existing.payee,
+      amountUSDC: existing.amountUSDC,
+      paidAt: existing.paidAt,
+      srcTxHash: existing.srcTxHash,
+    },
+    new Set(),
+  );
+  return (
+    verdict.ok &&
+    existing.refId.toLowerCase() === args.refId.toLowerCase() &&
+    existing.srcTxHash.toLowerCase() === args.txHash.toLowerCase() &&
+    existing.payee.toLowerCase() === args.payee.toLowerCase() &&
+    BigInt(existing.amountUSDC) === BigInt(args.amountUSDC)
+  );
 }

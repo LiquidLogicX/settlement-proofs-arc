@@ -83,7 +83,7 @@ Tempo rail   payer ──TIP-20 transferWithMemo──▶ payee        (Tempo)
 Arc rail     same flow, but the payment is USDC on Base and the proof is written on Arc
 ```
 
-- `refId = keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`. Retrying the same payment returns the existing proof; the contract also rejects duplicates.
+- `refId = keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`, and that id is a field of the settlement payload hash. A supplied refId that does not match is rejected. Retrying the same payment returns the existing proof; recording it again reverts.
 - Amounts are 6-decimal stablecoin units on both rails (TIP-20 tokens are always 6 decimals).
 - Tempo proofs carry a memo tag like `eip155:42431/AlphaUSD Design retainer`, so any reader knows which chain and token the `srcTxHash` belongs to. The payer's 32-byte TIP-20 transfer memo (an invoice number, for example) is kept as the note when no note is given.
 - Tempo fees are paid in pathUSD (Tempo has no native gas token). The recorder checks its pathUSD balance before every write and returns 503 if it's low, so a write never fails halfway.

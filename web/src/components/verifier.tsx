@@ -207,6 +207,18 @@ export function Verifier({
         </Card>
       ) : null}
 
+      {result?.status === "rejected" ? (
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardHeader>
+            <CardTitle className="text-lg text-foreground">Rejected</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>{result.message}</p>
+            <p className="break-all font-mono text-xs text-llx-mono">{result.query}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {result?.status === "not_found" ? (
         <Card className="border-dashed border-border bg-card">
           <CardHeader>

@@ -127,6 +127,54 @@ describe("POST /v1/tempo/proofs — Tempo payment in, Tempo proof out", () => {
     assert.equal(json.proof.memo, "eip155:42431/AlphaUSD INV-2026-1001");
   });
 
+  it("rejects a refId that does not match the hashed payload", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", {
+      ...body,
+      refId: `0x${"11".repeat(32)}`,
+    });
+    assert.equal(res.status, 400);
+    assert.equal(((await res.json()) as { code: string }).code, "REF_MISMATCH");
+    assert.equal(writes.length, 0);
+  });
+
+  it("rejects a replay of the same payment under a new refId", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const a = app({ tempo: rail });
+    assert.equal((await post(a, "/v1/tempo/proofs", body)).status, 201);
+    const replay = await post(a, "/v1/tempo/proofs", { ...body, refId: `0x${"11".repeat(32)}` });
+    assert.equal(replay.status, 400);
+    assert.equal(((await replay.json()) as { code: string }).code, "REF_MISMATCH");
+    assert.equal(writes.length, 1);
+  });
+
+  it("accepts an explicit refId that matches the payload", async () => {
+    const { rail, writes } = fakeTempoRail();
+    const refId = deriveRefId(PAY_TX, PAYEE, parseErc20UsdcAmount("12500000"));
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", { ...body, refId });
+    assert.equal(res.status, 201);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0]?.refId, refId);
+  });
+
+  it("rejects a stored proof whose refId is not bound to its payload", async () => {
+    const { rail, store, writes } = fakeTempoRail();
+    const refId = deriveRefId(PAY_TX, PAYEE, parseErc20UsdcAmount("12500000"));
+    store.set(refId.toLowerCase(), {
+      refId,
+      payee: PAYEE,
+      amountUSDC: parseErc20UsdcAmount("12500000"),
+      paidAt: 1,
+      srcTxHash: `0x${"22".repeat(32)}`,
+      memo: "unbound",
+      recordedAt: 1,
+    });
+    const res = await post(app({ tempo: rail }), "/v1/tempo/proofs", body);
+    assert.equal(res.status, 409);
+    assert.equal(((await res.json()) as { code: string }).code, "REF_MISMATCH");
+    assert.equal(writes.length, 0);
+  });
+
   it("same payment twice → 200 idempotent, no second write", async () => {
     const { rail, writes } = fakeTempoRail();
     const a = app({ tempo: rail });
