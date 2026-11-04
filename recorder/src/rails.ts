@@ -17,7 +17,12 @@ import {
   writeProof,
   type Proof,
 } from "./arc.js";
-import { createBaseClient, verifyBasePayment } from "./base.js";
+import {
+  BASE_MIN_SETTLEMENT_SECONDS,
+  asBasePaymentReader,
+  createBaseClient,
+  verifyBasePayment,
+} from "./base.js";
 import type { ArcRailConfig, TempoRailConfig } from "./config.js";
 import { ARC_ERC20_USDC_DECIMALS, ARC_NATIVE_USDC_DECIMALS, type Erc20UsdcAmount } from "./decimals.js";
 import { isGasLow, lowGasError } from "./gas-guard.js";
@@ -112,7 +117,7 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
       readProof({ publicClient: arc.publicClient, address: cfg.settlementProofsAddress, refId }),
     async verifyPayment({ txHash, payee, amountUSDC }) {
       const v = await verifyBasePayment({
-        client: baseClient,
+        client: asBasePaymentReader(baseClient),
         txHash,
         payee,
         amountUSDC,
@@ -175,6 +180,8 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
         lowGas: isGasLow(balance, cfg.minRecorderGasWei),
         proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
         minConfirmations: cfg.minConfirmations,
+        /** Chain-time seconds (or L1-safe inclusion) required before a Base payment is settled. */
+        minSettlementSeconds: BASE_MIN_SETTLEMENT_SECONDS,
         settlementRail: "base-usdc-notarize-arc",
       };
     },
