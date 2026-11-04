@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { ARC_ERC20_USDC_DECIMALS, ARC_NATIVE_USDC_DECIMALS } from "./decimals.js";
+import { BASE_MIN_SETTLEMENT_SECONDS } from "./base.js";
 import { type Rail, type RailId, createArcRail, createTempoRail } from "./rails.js";
 
 const config = loadConfig();
@@ -29,6 +30,7 @@ console.log(
       registryChainId: r.registry.chainId,
       paymentChainId: r.payment.chainId,
       minConfirmations: r.minConfirmations,
+      ...(r.id === "arc" ? { minSettlementSeconds: BASE_MIN_SETTLEMENT_SECONDS } : {}),
     })),
     proofAmountDecimals: ARC_ERC20_USDC_DECIMALS,
     arcNativeGasDecimals: ARC_NATIVE_USDC_DECIMALS,

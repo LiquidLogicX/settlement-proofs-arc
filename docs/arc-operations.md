@@ -42,7 +42,7 @@ Proof `amountUSDC` is always **6-decimal ERC-20 units**. Treating Arc native wei
 
 1. Treasurer (or agent) pays USDC on **Base**.
 2. Operator (or agent) `POST /v1/proofs` with the Base `txHash`, cleartext `payee`, `amountUSDC` (6-dec), and optional `memo` / `refId` / `paidAt`. Requests require `Authorization: Bearer <RECORDER_API_KEY>` or `X-Api-Key`.
-3. Recorder checks the Base tx is confirmed (default **12** confirmations) and successful, then **requires** a matching Base USDC `Transfer` to `payee` for `amountUSDC`. A mismatch is **rejected (400)**. There is **no** `ALLOW_UNVERIFIED_AMOUNT` / TxOnly path.
+3. Recorder checks the Base tx is successful and settled, then **requires** a matching Base USDC `Transfer` to `payee` for `amountUSDC`. Settled means the payment block is at least **60 seconds** older than the chain head, **or** at or behind the L1-safe head (`safe`). `MIN_CONFIRMATIONS` (default **12**) is an optional extra floor and is not the wait — after Denim, 12 blocks is about 2.4 seconds. A mismatch is **rejected (400)**. There is **no** `ALLOW_UNVERIFIED_AMOUNT` / TxOnly path.
 4. Recorder derives `refId` if needed and calls `recordPayment` on Arc with cleartext `payee` and public `srcTxHash`. Only `RECORDER_ROLE` can write. The owner (`DEFAULT_ADMIN_ROLE`) can grant/revoke that role and **cannot** write proofs.
 5. The public site reads the registry via Arc RPC and shows cleartext payee + BaseScan links for `srcTxHash` + Arc explorer links for the proof tx.
 
@@ -93,7 +93,7 @@ Blueprint: [`render.yaml`](../render.yaml). Docker context `recorder`, health `/
 | `RECORDER_API_KEY` | Bearer / X-Api-Key for `POST /v1/proofs` |
 | `PORT` | Set by Render |
 
-Optional: `MIN_CONFIRMATIONS` (default **`12`**), `HOST` (default `0.0.0.0`).
+Optional: `MIN_CONFIRMATIONS` (extra confirmation floor, default **`12`**; Base settlement waits 60 seconds or until the block is at or behind the L1-safe head), `HOST` (default `0.0.0.0`).
 
 Do **not** set `ALLOW_UNVERIFIED_AMOUNT`, `VIEW_SALT_KEY`, or related confidentiality env vars — startup rejects them.
 
@@ -120,7 +120,7 @@ Root Directory `web`.
 | `SETTLEMENT_PROOFS_ADDRESS` | Recorder | no |
 | `SETTLEMENT_RECORDER_PRIVATE_KEY` | Recorder | **yes** — never commit |
 | `RECORDER_API_KEY` | Recorder | **yes** — never commit |
-| `MIN_CONFIRMATIONS` | Recorder (optional, default `12`) | no |
+| `MIN_CONFIRMATIONS` | Recorder (optional extra floor, default `12`) | no |
 | `PORT` | Recorder | no |
 | `NEXT_PUBLIC_ARC_RPC_URL` | Web | no |
 | `NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS` | Web | no |

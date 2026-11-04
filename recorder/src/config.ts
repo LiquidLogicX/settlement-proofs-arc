@@ -127,8 +127,9 @@ function loadArc(env: Env): ArcRailConfig | null {
       required(env, "SETTLEMENT_RECORDER_PRIVATE_KEY", ctx),
       "SETTLEMENT_RECORDER_PRIVATE_KEY",
     ),
-    // Default 12: Base mainnet reorg depth; avoid recording proofs that can be
-    // orphaned by a shallow reorganization of recent blocks.
+    // Optional extra confirmation floor on top of the time / L1-safe rule in
+    // base.ts (60 seconds, or at/behind the safe head). Not a time wait:
+    // after Denim, 12 blocks is ~2.4s. Set 1 to keep only that rule.
     minConfirmations: Math.max(1, Number(env.MIN_CONFIRMATIONS ?? "12")),
     minRecorderGasWei: parseMinGasWei(env.MIN_RECORDER_GAS_WEI),
   };
