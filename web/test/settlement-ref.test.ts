@@ -4,7 +4,9 @@ import type { Hex } from "viem";
 import {
   canonicalRefId,
   filterVerifiedProofs,
+  ledgerRows,
   settlementRefMessage,
+  usedRefIdsForSettlement,
   verifySettlementRef,
   type SettlementPayload,
 } from "../src/lib/settlement-ref";
@@ -58,4 +60,25 @@ test("verifier rejects a reused refId", () => {
     assert.match(settlementRefMessage(replay.code), /replayed/);
   }
   assert.equal(filterVerifiedProofs([body, body]).length, 1);
+});
+
+test("ledger keeps a caller-chosen refId and labels it legacy", () => {
+  const legacy = { ...body, refId: OTHER };
+  const rows = ledgerRows([body, legacy, body]);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0]?.legacy, false);
+  assert.equal(rows[1]?.legacy, true);
+  assert.equal(rows[1]?.refId, OTHER);
+});
+
+test("an indexed legacy proof makes the canonical refId count as reused", () => {
+  const legacy = { ...body, refId: OTHER };
+  const used = usedRefIdsForSettlement([legacy], {
+    srcTxHash: body.srcTxHash,
+    payee: body.payee,
+    amountUSDC: body.amountUSDC,
+  });
+  const verdict = verifySettlementRef({ claimedRefId: REF, payload: body, usedRefIds: used });
+  assert.equal(verdict.ok, false);
+  if (!verdict.ok) assert.equal(verdict.code, "REF_REUSED");
 });

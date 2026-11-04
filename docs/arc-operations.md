@@ -52,7 +52,7 @@ If `refId` is omitted, the recorder derives it as Solidity:
 keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))
 ```
 
-Retries of the same `refId` return the existing proof (HTTP 200) without a second write. The contract also reverts on duplicate `refId`.
+Retries of the same canonical `refId` return the existing proof (HTTP 200) without a second write. The live contract reverts when that same `refId` is submitted twice. It does not yet require the id to be the payment hash — the recorder enforces that (`400 REF_MISMATCH`, and `409 REF_REUSED` when the payment is already indexed under any id). The contract source will enforce `RefIdMismatch` as well, after a future registry redeploy.
 
 The recorder wallet holds **no treasury funds**. It only needs Arc gas (native USDC, 18-dec) to submit `recordPayment`.
 

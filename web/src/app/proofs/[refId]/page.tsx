@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ProofFieldList } from "@/components/proof-details";
+import { LegacyRefBadge, ProofFieldList } from "@/components/proof-details";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import { SiteChrome } from "@/components/site-chrome";
 import { Badge } from "@/components/ui/badge";
@@ -109,6 +109,7 @@ export default async function ProofDetailPage({ params, searchParams }: PageProp
                   {selfTestBadgeLabel(networkId)}
                 </Badge>
               ) : null}
+              <LegacyRefBadge legacy={proof?.legacy} />
             </div>
             {isTempoSyntheticSelfTest({ networkId, selfTest, refId: proof.refId }) ? (
               <p className="mb-3 text-sm text-llx-selftest-text">

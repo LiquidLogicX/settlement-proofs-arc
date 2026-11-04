@@ -21,7 +21,7 @@ Programmatic chain access uses JSON-RPC only (`BASE_RPC_URL`, `ARC_RPC_URL=https
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Always answers fast (Render probe). Recorder address and gas balance from a cached chain check (refreshed in the background every ~15 s, each RPC check capped at 4 s); `rails` lists each configured rail, `chain` shows `checkedAt`, `stale` and any refresh `errors` (open, no auth) |
+| `GET` | `/health` | Liveness only: `{ "ok": true }`. Open, no auth. It does not return recorder addresses, balances, token lists, or RPC errors. A cached chain check still runs in the background so a slow RPC cannot hold the probe (refreshed about every 15 s, each check capped at 4 s); that snapshot is not part of the response |
 | `POST` | `/v1/proofs` | Verify the payment and record a proof (**requires API key**). Optional `chain`: `"base"`/`"arc"` (default when Arc is configured), `"tempo"`, or a CAIP-2 id |
 | `POST` | `/v1/tempo/proofs` | Same as `/v1/proofs` with `chain: "tempo"` |
 | `GET` | `/v1/proofs/lookup` | Read-only: is this proof already recorded? Returns `proofId` + Arc `proofTxHash` (**requires API key**) |
@@ -54,8 +54,8 @@ Rate limit on write: **30**/IP/minute → **429**.
 - `payee` — cleartext recipient (required). Verified against Base USDC `Transfer` and stored on-chain.
 - `amountUSDC` — **integer** with **6** decimals (`1 USDC = 1000000`). Not Arc native 18-dec wei.
 - `memo` — optional string.
-- `paidAt` — optional unix seconds. If omitted, the Base block timestamp is used.
-- `refId` — optional `bytes32`. If omitted, derived as Solidity `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`. If supplied, it must equal that hash (`400 REF_MISMATCH` otherwise). The id is bound into the settlement payload hash.
+- `paidAt` — ignored if sent. The recorder writes the payment transaction's block timestamp, not the request and not the recorder's clock.
+- `refId` — optional `bytes32`. If omitted, the recorder derives Solidity `keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`. If supplied, it must equal that hash (`400 REF_MISMATCH`). This check is in the recorder. The live registries do not enforce it until a future redeploy; `contracts/src/SettlementProofs.sol` reverts with `RefIdMismatch` / `DuplicateRefId` only after that deploy.
 
 Sample **201** response:
 
@@ -75,7 +75,7 @@ Sample **201** response:
 }
 ```
 
-Idempotent on `refId`: a retry of the same id returns **200** with the existing proof and does not send a second Arc transaction.
+Idempotent on the canonical `refId`: a retry of that same id returns **200** with the existing proof and does not send a second transaction. If the payment is already indexed under a different id, the recorder returns **409** `REF_REUSED` and does not write.
 
 Both 201 and idempotent 200 responses also carry (additive, best-effort — `null` if the Arc RPC read fails):
 
@@ -96,7 +96,7 @@ Content-Type: application/json
 - `amountUSDC` is in the token's 6-decimal units (all TIP-20 tokens use 6 decimals).
 - The on-chain memo becomes `eip155:42431/<TokenSymbol> <note>` (note capped at 128 chars). `note` = request `memo`, else the payer's TIP-20 `transferWithMemo` text, else empty. The Arc rail rejects memos that start with an `eip155:` tag, so a Base proof can't pose as a Tempo one.
 - Fees are paid in pathUSD. Before writing, the recorder requires `TEMPO_MIN_RECORDER_FEE_BALANCE` (default 0.05 pathUSD) or returns `503 LOW_GAS_BALANCE`.
-- Chain `4217` (Tempo mainnet) is refused at startup unless `TEMPO_ALLOW_MAINNET=true`. The Tempo key must differ from the Arc recorder key.
+- Chain `4217` (Tempo mainnet) is refused at startup unless `TEMPO_ALLOW_MAINNET=true` **and** `TEMPO_ALLOWED_TOKENS` is set. The Tempo key must differ from the Arc recorder key.
 
 Response (`201` new, `200` idempotent):
 
@@ -124,7 +124,7 @@ Demo client: `npm run demo:tempo -- --amount 1.25 --token AlphaUSD --memo "INV-1
 
 ### Low gas guard
 
-Before any Arc write the recorder reads its native gas balance. Below `MIN_RECORDER_GAS_WEI` (default `50000000000000000` = 0.05 native USDC, 18 decimals) it logs a warning and returns **503** `{ "code": "LOW_GAS_BALANCE" }` without writing. The idempotent path (proof already exists) still answers. `/health` exposes `minRecorderGasWei` and `lowGas`.
+Before any Arc write the recorder reads its native gas balance. Below `MIN_RECORDER_GAS_WEI` (default `50000000000000000` = 0.05 native USDC, 18 decimals) it logs a warning and returns **503** `{ "code": "LOW_GAS_BALANCE" }` without writing. The idempotent path (proof already exists) still answers. The low-balance decision is not included in `/health`.
 
 ### `GET /v1/proofs/lookup`
 

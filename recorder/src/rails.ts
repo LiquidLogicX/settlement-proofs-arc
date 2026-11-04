@@ -21,10 +21,17 @@ import { createBaseClient, verifyBasePayment } from "./base.js";
 import type { ArcRailConfig, TempoRailConfig } from "./config.js";
 import { ARC_ERC20_USDC_DECIMALS, ARC_NATIVE_USDC_DECIMALS, type Erc20UsdcAmount } from "./decimals.js";
 import { isGasLow, lowGasError } from "./gas-guard.js";
-import { type ArcReader, findProofId, findProofTxHash } from "./proof-lookup.js";
+import {
+  type ArcReader,
+  type IndexedProof,
+  findProofId,
+  findProofTxHash,
+  listIndexedProofs,
+} from "./proof-lookup.js";
 import { formatProofMemo, parseProofMemo } from "./proof-memo.js";
 import {
   TEMPO_MAINNET_CHAIN_ID,
+  assertTempoMainnetStartup,
   createTempoClients,
   describeTransferMemo,
   lowFeeBalanceError,
@@ -70,6 +77,8 @@ export type Rail = {
   recorderAddress: Address;
   minConfirmations: number;
   readProof(refId: Hex): Promise<Proof | null>;
+  /** Append-only registry index (oldest first). Replay checks read this, not an empty set. */
+  listProofs(): Promise<Proof[]>;
   verifyPayment(args: { txHash: Hex; payee: Address; amountUSDC: Erc20UsdcAmount }): Promise<VerifiedPayment>;
   /** Validate the operator note for this rail; return an error string to reject (400). */
   validateNote(note: string): string | null;
@@ -82,6 +91,18 @@ export type Rail = {
   findProofTxHash(refId: Hex, recordedAt?: number): Promise<Hex | null>;
   health(): Promise<Record<string, unknown>>;
 };
+
+function indexedToProof(proof: IndexedProof): Proof {
+  return {
+    refId: proof.refId,
+    payee: proof.payee,
+    amountUSDC: proof.amountUSDC as Erc20UsdcAmount,
+    paidAt: Number(proof.paidAt),
+    srcTxHash: proof.srcTxHash,
+    memo: proof.memo,
+    recordedAt: Number(proof.recordedAt),
+  };
+}
 
 /** Reject notes that would masquerade as a non-Base payment tag on the Arc rail. */
 function rejectTaggedNote(note: string): string | null {
@@ -110,6 +131,8 @@ export async function createArcRail(cfg: ArcRailConfig): Promise<Rail> {
     minConfirmations: cfg.minConfirmations,
     readProof: (refId) =>
       readProof({ publicClient: arc.publicClient, address: cfg.settlementProofsAddress, refId }),
+    listProofs: async () =>
+      (await listIndexedProofs(reader, cfg.settlementProofsAddress)).map(indexedToProof),
     async verifyPayment({ txHash, payee, amountUSDC }) {
       const v = await verifyBasePayment({
         client: baseClient,
@@ -191,11 +214,11 @@ export const TEMPO_LOG_CHUNK = 90_000n;
 
 export async function createTempoRail(cfg: TempoRailConfig): Promise<Rail> {
   const chainId = await createPublicClient({ transport: http(cfg.rpcUrl) }).getChainId();
-  if (chainId === TEMPO_MAINNET_CHAIN_ID && !cfg.allowMainnet) {
-    throw new Error(
-      "TEMPO_RPC_URL points at Tempo mainnet (chain 4217). This recorder only runs Tempo on the Moderato testnet unless TEMPO_ALLOW_MAINNET=true is set deliberately.",
-    );
-  }
+  assertTempoMainnetStartup({
+    chainId,
+    allowMainnet: cfg.allowMainnet,
+    allowedTokensConfigured: cfg.allowedTokensConfigured,
+  });
   const tempo = createTempoClients({
     rpcUrl: cfg.rpcUrl,
     privateKey: cfg.recorderPrivateKey,
@@ -222,6 +245,8 @@ export async function createTempoRail(cfg: TempoRailConfig): Promise<Rail> {
     minConfirmations: cfg.minConfirmations,
     readProof: (refId) =>
       readProof({ publicClient: publicForProofs, address: cfg.settlementProofsAddress, refId }),
+    listProofs: async () =>
+      (await listIndexedProofs(reader, cfg.settlementProofsAddress)).map(indexedToProof),
     async verifyPayment({ txHash, payee, amountUSDC }) {
       const v = await verifyTempoPayment({
         client: paymentReader,

@@ -83,7 +83,9 @@ Tempo rail   payer ──TIP-20 transferWithMemo──▶ payee        (Tempo)
 Arc rail     same flow, but the payment is USDC on Base and the proof is written on Arc
 ```
 
-- `refId = keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`, and that id is a field of the settlement payload hash. A supplied refId that does not match is rejected. Retrying the same payment returns the existing proof; recording it again reverts.
+- `refId = keccak256(abi.encodePacked(srcTxHash, payee, amountUSDC))`, and that id is a field of the settlement payload hash.
+  **Enforced today, in the recorder (no registry redeploy):** a supplied id that is not that hash is rejected (`400 REF_MISMATCH`). An exact retry of a proof already stored under that id returns the existing proof (`200`). If the payment is already in the on-chain index — including under an older caller-chosen id — a second record is refused (`409 REF_REUSED`) and nothing is written. The public ledger still lists those older rows and labels them **legacy**. Contract `proofCount` and `totalSettled` already include them.
+  **Enforced only after a future SettlementProofs redeploy:** the contract source reverts with `RefIdMismatch` when the id is not the payment hash and with `DuplicateRefId` on replay. The registries that are live now do not run that check. Shipping this repo does not redeploy them.
 - Amounts are 6-decimal stablecoin units on both rails (TIP-20 tokens are always 6 decimals).
 - Tempo proofs carry a memo tag like `eip155:42431/AlphaUSD Design retainer`, so any reader knows which chain and token the `srcTxHash` belongs to. The payer's 32-byte TIP-20 transfer memo (an invoice number, for example) is kept as the note when no note is given.
 - Tempo fees are paid in pathUSD (Tempo has no native gas token). The recorder checks its pathUSD balance before every write and returns 503 if it's low, so a write never fails halfway.
@@ -110,7 +112,7 @@ git submodule update --init --recursive
 cd contracts && forge test                     # 14 contract tests
 
 cd ../recorder && npm install
-npm run typecheck && npm test && npm run build # 59 tests (Tempo path, rails, config, Arc lookups)
+npm run typecheck && npm test && npm run build # recorder suite (Tempo path, rails, config, Arc lookups)
 
 cd ../web && npm install
 npx tsc --noEmit -p tsconfig.json
@@ -132,7 +134,7 @@ Response (201, or 200 if already recorded): `proof`, `payment` (chain, payer, pa
 
 Real keys never go in git; placeholders live in `**/.env.example`.
 
-- **Recorder, Tempo rail:** `TEMPO_SETTLEMENT_PROOFS_ADDRESS`, `TEMPO_RECORDER_PRIVATE_KEY` (testnet key, pathUSD for fees, must differ from the Arc key), optional `TEMPO_RPC_URL`, `TEMPO_ALLOWED_TOKENS`, `TEMPO_MIN_RECORDER_FEE_BALANCE`. Tempo mainnet (chain 4217) is refused unless `TEMPO_ALLOW_MAINNET=true`.
+- **Recorder, Tempo rail:** `TEMPO_SETTLEMENT_PROOFS_ADDRESS`, `TEMPO_RECORDER_PRIVATE_KEY` (testnet key, pathUSD for fees, must differ from the Arc key), optional `TEMPO_RPC_URL`, `TEMPO_ALLOWED_TOKENS`, `TEMPO_MIN_RECORDER_FEE_BALANCE`. Tempo mainnet (chain 4217) is refused unless `TEMPO_ALLOW_MAINNET=true`, and it is also refused unless `TEMPO_ALLOWED_TOKENS` is set (the Moderato default list is not used on mainnet).
 - **Recorder, Arc rail:** `BASE_RPC_URL`, `ARC_RPC_URL`, `SETTLEMENT_PROOFS_ADDRESS`, `SETTLEMENT_RECORDER_PRIVATE_KEY`, `MIN_CONFIRMATIONS` (default 12). Unchanged; see [`docs/arc-operations.md`](docs/arc-operations.md).
 - **Both:** `RECORDER_API_KEY`, optional `PUBLIC_VERIFIER_URL`.
 - **Web:** `NEXT_PUBLIC_SETTLEMENT_PROOFS_ADDRESS` (Arc), `NEXT_PUBLIC_TEMPO_SETTLEMENT_PROOFS_ADDRESS` (Tempo testnet tab; defaults to the Moderato registry above), optional `NEXT_PUBLIC_TEMPO_REGISTRY_FROM_BLOCK`, `NEXT_PUBLIC_BASE_RPC_URL`. Tempo mainnet tab: optional `NEXT_PUBLIC_TEMPO_MAINNET_*` overrides (defaults to the live mainnet registry) and `NEXT_PUBLIC_TEMPO_DEFAULT_NETWORK` (see `web/.env.example`).

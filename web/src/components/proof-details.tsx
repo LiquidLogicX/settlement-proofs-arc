@@ -30,6 +30,20 @@ const CHECK_COPY: Record<PaymentCheck, { label: string; className: string }> = {
   },
 };
 
+/** Caller-chosen refId recorded before ids were derived from the payment. */
+export function LegacyRefBadge({ legacy }: { legacy?: boolean }) {
+  if (!legacy) return null;
+  return (
+    <Badge
+      variant="outline"
+      className="border-white/25 bg-transparent text-muted-foreground"
+      title="Recorded with a caller-chosen refId, before ids were derived from the payment. Included in the on-chain total."
+    >
+      legacy
+    </Badge>
+  );
+}
+
 export function PaymentCheckBadge({ payment }: { payment: PaymentInfo }) {
   const copy = CHECK_COPY[payment.check];
   return (

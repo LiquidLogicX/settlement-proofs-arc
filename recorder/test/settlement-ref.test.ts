@@ -4,7 +4,10 @@ import type { Hex } from "viem";
 import {
   canonicalRefId,
   filterVerifiedProofs,
+  isLegacySettlementRef,
+  ledgerRows,
   settlementPayloadHash,
+  usedRefIdsForSettlement,
   verifySettlementRef,
   type SettlementPayload,
 } from "../src/settlement-ref.js";
@@ -107,6 +110,43 @@ describe("settlement refId binding", () => {
     assert.equal(accepted.length, 2);
     assert.equal(accepted[0]?.refId, REF);
     assert.equal(accepted[1]?.refId, secondRef);
+  });
+
+  it("marks a caller-chosen refId as legacy and keeps it on the ledger", () => {
+    const secondSrc = `0x${"ab".repeat(32)}` as Hex;
+    const secondRef = canonicalRefId(secondSrc, PAYEE, 1n);
+    const legacy = payload({ refId: OTHER, srcTxHash: secondSrc, amountUSDC: 1n });
+    const rows = ledgerRows([payload(), payload(), legacy, payload({ refId: secondRef, srcTxHash: secondSrc, amountUSDC: 1n })]);
+    assert.equal(rows.length, 3);
+    assert.equal(rows[0]?.legacy, false);
+    assert.equal(rows[1]?.legacy, true);
+    assert.equal(rows[1]?.refId, OTHER);
+    assert.equal(rows[2]?.legacy, false);
+    assert.equal(isLegacySettlementRef(legacy), true);
+    assert.equal(isLegacySettlementRef(payload()), false);
+  });
+
+  it("populates usedRefIds from an indexed legacy proof so the replay path fires", () => {
+    const legacy = payload({ refId: OTHER });
+    const used = usedRefIdsForSettlement([legacy], {
+      srcTxHash: SRC,
+      payee: PAYEE,
+      amountUSDC: AMOUNT,
+    });
+    assert.equal(used.has(OTHER.toLowerCase()), true);
+    assert.equal(used.has(REF.toLowerCase()), true);
+    const verdict = verifySettlementRef({
+      claimedRefId: REF,
+      payload: payload(),
+      usedRefIds: used,
+    });
+    assert.equal(verdict.ok, false);
+    if (!verdict.ok) assert.equal(verdict.code, "REF_REUSED");
+    assert.deepEqual(
+      web.usedRefIdsForSettlement([legacy], { srcTxHash: SRC, payee: PAYEE, amountUSDC: AMOUNT }),
+      used,
+    );
+    assert.equal(web.ledgerRows([legacy])[0]?.legacy, true);
   });
 
   it("web verifier copy agrees on the live vector", () => {

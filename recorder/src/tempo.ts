@@ -118,6 +118,28 @@ export function parseTempoTokens(raw: string | undefined): TokenAllowlist {
   return toAllowlist(record);
 }
 
+/**
+ * Mainnet must not boot on the Moderato faucet-token default.
+ * Call after the RPC chain id is known. `TEMPO_ALLOW_MAINNET` alone is not enough.
+ */
+export function assertTempoMainnetStartup(args: {
+  chainId: number;
+  allowMainnet: boolean;
+  allowedTokensConfigured: boolean;
+}): void {
+  if (args.chainId !== TEMPO_MAINNET_CHAIN_ID) return;
+  if (!args.allowMainnet) {
+    throw new Error(
+      "TEMPO_RPC_URL points at Tempo mainnet (chain 4217). This recorder only runs Tempo on the Moderato testnet unless TEMPO_ALLOW_MAINNET=true is set deliberately.",
+    );
+  }
+  if (!args.allowedTokensConfigured) {
+    throw new Error(
+      "Tempo mainnet (chain 4217) requires TEMPO_ALLOWED_TOKENS. Refusing to start with the Moderato default token list.",
+    );
+  }
+}
+
 export function parseMinFeeBalance(raw: string | undefined): bigint {
   const v = raw?.trim();
   if (!v) return DEFAULT_MIN_RECORDER_FEE_BALANCE;

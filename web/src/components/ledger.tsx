@@ -24,7 +24,7 @@ import {
   type NetworkId,
 } from "@/lib/config";
 import { ProofExplorerLinks } from "@/components/proof-links";
-import { ChainChip } from "@/components/proof-details";
+import { ChainChip, LegacyRefBadge } from "@/components/proof-details";
 import { paymentOf } from "@/lib/payments";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -319,6 +319,7 @@ function ProofRow({ proof, networkId }: { proof: LedgerProof; networkId: Network
               {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
+          <LegacyRefBadge legacy={proof.legacy} />
         </span>
       </TableCell>
       <TableCell className="text-right">
@@ -366,6 +367,7 @@ function ProofCard({ proof, networkId }: { proof: LedgerProof; networkId: Networ
               {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
+          <LegacyRefBadge legacy={proof.legacy} />
         </p>
         <ProofExplorerLinks proof={proof} networkId={networkId} />
       </CardContent>

@@ -124,6 +124,71 @@ export function filterVerifiedProofs<T extends SettlementPayload>(proofs: readon
   return accepted;
 }
 
+/** True when `refId` was caller-chosen and is not the payment hash. Malformed rows count as legacy. */
+export function isLegacySettlementRef(proof: SettlementPayload): boolean {
+  try {
+    return (
+      canonicalRefId(proof.srcTxHash, proof.payee, proof.amountUSDC).toLowerCase() !==
+      proof.refId.toLowerCase()
+    );
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Rows for the public ledger. A later copy of a refId is a replay and is dropped.
+ * A caller-chosen refId stays, with `legacy: true`, so older proofs remain visible.
+ * On-chain `proofCount` / `totalSettled` already include those rows.
+ */
+export function ledgerRows<T extends SettlementPayload>(
+  proofs: readonly T[],
+): Array<T & { legacy: boolean }> {
+  const seen = new Set<string>();
+  const rows: Array<T & { legacy: boolean }> = [];
+  for (const proof of proofs) {
+    const id = proof.refId.toLowerCase();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    rows.push({ ...proof, legacy: isLegacySettlementRef(proof) });
+  }
+  return rows;
+}
+
+function sameSettlement(
+  proof: SettlementPayload,
+  candidate: { srcTxHash: string; payee: string; amountUSDC: bigint },
+): boolean {
+  return (
+    proof.srcTxHash.toLowerCase() === candidate.srcTxHash.toLowerCase() &&
+    proof.payee.toLowerCase() === candidate.payee.toLowerCase() &&
+    BigInt(proof.amountUSDC) === BigInt(candidate.amountUSDC)
+  );
+}
+
+/**
+ * Ref ids already stored on the registry index (`getProofAt`).
+ * If any stored row is this same payment, the canonical refId is included as
+ * well, so a second record is `REF_REUSED` even when the first id was caller-chosen.
+ */
+export function usedRefIdsForSettlement(
+  indexed: readonly SettlementPayload[],
+  candidate: { srcTxHash: Hex; payee: string; amountUSDC: bigint },
+): Set<string> {
+  const used = new Set<string>();
+  let canonical: Hex | null = null;
+  try {
+    canonical = canonicalRefId(candidate.srcTxHash, candidate.payee, candidate.amountUSDC);
+  } catch {
+    canonical = null;
+  }
+  for (const proof of indexed) {
+    used.add(proof.refId.toLowerCase());
+    if (canonical && sameSettlement(proof, candidate)) used.add(canonical.toLowerCase());
+  }
+  return used;
+}
+
 export function settlementRefMessage(code: SettlementRefCode): string {
   if (code === "REF_REUSED") {
     return "This settlement refId was already used and cannot be replayed.";

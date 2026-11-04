@@ -90,7 +90,7 @@ Why each matters:
    ```
 
    - Auth: `RECORDER_API_KEY` as `Authorization: Bearer …` or `x-api-key: …` (the same key the Arc path uses).
-   - `txHash`: the Tempo payment tx. `payee`: the transfer's recipient. `amountUSDC`: exact 6-dec units (1 USDC.e = `1000000`). `memo` is optional; when it's empty the on-chain TIP-20 memo is used. Optional fields are `refId` (default `keccak(txHash, payee, amount)`) and `paidAt` (default is the payment block time).
+   - `txHash`: the Tempo payment tx. `payee`: the transfer's recipient. `amountUSDC`: exact 6-dec units (1 USDC.e = `1000000`). `memo` is optional; when it's empty the on-chain TIP-20 memo is used. Optional `refId` must equal `keccak(txHash, payee, amount)` or the recorder rejects it. `paidAt` in the request is ignored; the recorder writes the payment block timestamp.
    - Equivalent: `POST /v1/proofs` with `"chain":"tempo"` (or `"eip155:4217"`). Without `chain`, `/v1/proofs` goes to Arc.
 3. Expect `201` with `proof`, `proofTxHash`, `registry.explorerUrl` (`https://explore.tempo.xyz/tx/…`), payer/token (`USDC.e`) and `verifyUrl`. The on-chain memo reads `eip155:4217/USDC.e First Tempo mainnet proof`. Repeating the call returns `200 idempotent`. `400 TIP20_AMOUNT_UNVERIFIED` means the payee, amount or token did not match (nothing is written). `503 LOW_GAS_BALANCE` means the recorder holds less than 0.05 USDC.e.
 4. Read-only re-check: `GET /v1/proofs/lookup?chain=tempo&txHash=0x…&payee=0xea80…6dac&amountUSDC=1000000` (same auth).

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Address, Hex } from "viem";
-import { type ArcReader, findProofId, findProofTxHash } from "../src/proof-lookup.js";
+import { type ArcReader, findProofId, findProofTxHash, listIndexedProofs } from "../src/proof-lookup.js";
 import {
   DEFAULT_MIN_RECORDER_GAS_WEI,
   isGasLow,
@@ -96,6 +96,73 @@ describe("findProofTxHash (PaymentRecorded by indexed refId)", () => {
   it("returns null when never emitted", async () => {
     const { client } = fakeArc({ refIds: [], tip: 20_000n });
     assert.equal(await findProofTxHash(client, CONTRACT, PROOF1_REF), null);
+  });
+});
+
+describe("listIndexedProofs", () => {
+  it("returns every indexed row, oldest first, for replay checks", async () => {
+    const payee = "0xfd689a93346AA40D2F38dC2ab6Eb436A57AA45c7" as Address;
+    const src = ("0x" + "11".repeat(32)) as Hex;
+    const rows = [
+      {
+        refId: PROOF1_REF,
+        payee,
+        amountUSDC: 1n,
+        paidAt: 10n,
+        srcTxHash: src,
+        memo: "first",
+        recordedAt: 11n,
+      },
+      {
+        refId: ("0x" + "ab".repeat(32)) as Hex,
+        payee,
+        amountUSDC: 2n,
+        paidAt: 12n,
+        srcTxHash: src,
+        memo: "second",
+        recordedAt: 13n,
+      },
+    ];
+    const client: ArcReader = {
+      async readContract(args) {
+        if (args.functionName === "proofCount") return BigInt(rows.length);
+        return rows[Number((args.args as [bigint])[0])]!;
+      },
+      async getBlockNumber() {
+        return 1n;
+      },
+      async getBlock() {
+        return { timestamp: 1n };
+      },
+      async getContractEvents() {
+        return [];
+      },
+    };
+    const listed = await listIndexedProofs(client, CONTRACT);
+    assert.equal(listed.length, 2);
+    assert.equal(listed[0]?.refId, PROOF1_REF);
+    assert.equal(listed[1]?.memo, "second");
+  });
+
+  it("refuses to scan a partial index", async () => {
+    const client: ArcReader = {
+      async readContract() {
+        return 5000n;
+      },
+      async getBlockNumber() {
+        return 1n;
+      },
+      async getBlock() {
+        return { timestamp: 1n };
+      },
+      async getContractEvents() {
+        return [];
+      },
+    };
+    await assert.rejects(
+      () => listIndexedProofs(client, CONTRACT, 2),
+      (err: { status?: number; code?: string }) => err.status === 503 && err.code === "REGISTRY_READ_FAILED",
+    );
   });
 });
 

@@ -9,12 +9,7 @@ import {
 } from "viem";
 import { settlementProofsAbi } from "./abi";
 import { mapLimit, resolvePayment, type PaymentInfo } from "./payments";
-import {
-  filterVerifiedProofs,
-  settlementRefMessage,
-  verifyRecordedProof,
-  type SettlementRefCode,
-} from "./settlement-ref";
+import { isLegacySettlementRef, ledgerRows, type SettlementRefCode } from "./settlement-ref";
 import {
   getNetwork,
   getPublicConfig,
@@ -42,6 +37,11 @@ export type LedgerProof = {
   proofTxHash: Hex | null;
   /** Payment chain + independent on-chain re-check (payer, token). Null if not resolved. */
   payment: PaymentInfo | null;
+  /**
+   * Caller-chosen refId from before ids were derived from the payment.
+   * The row stays on the ledger; on-chain totals already include it.
+   */
+  legacy: boolean;
 };
 
 export type LedgerSnapshot = {
@@ -233,33 +233,8 @@ function requireRegistryContext(networkId: NetworkId = "arc"): RegistryContext {
   return { client, address: network.settlementProofsAddress, network };
 }
 
-function refVerdict(proof: LedgerProof) {
-  return verifyRecordedProof(
-    {
-      refId: proof.refId,
-      payee: proof.payee,
-      amountUSDC: proof.amountUSDC,
-      paidAt: proof.paidAt,
-      srcTxHash: proof.srcTxHash,
-    },
-    new Set(),
-  );
-}
-
-/** Unbound or replayed refIds are not a verified settlement. */
-function rejectLookup(proof: LedgerProof, query: Hex): ProofLookupResult | null {
-  const verdict = refVerdict(proof);
-  if (verdict.ok) return null;
-  return {
-    status: "rejected",
-    code: verdict.code,
-    message: settlementRefMessage(verdict.code),
-    query,
-  };
-}
-
 function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
-  return {
+  const proof: LedgerProof = {
     refId: raw.refId,
     payee: raw.payee,
     amountUSDC: raw.amountUSDC,
@@ -269,7 +244,9 @@ function toLedgerProof(raw: RawProof, proofTxHash: Hex | null): LedgerProof {
     recordedAt: Number(raw.recordedAt),
     proofTxHash,
     payment: null,
+    legacy: false,
   };
+  return { ...proof, legacy: isLegacySettlementRef(proof) };
 }
 
 /** Attach payment source + on-chain payment re-check (best effort, never throws). */
@@ -490,7 +467,7 @@ export async function fetchLedger(networkId: NetworkId = "arc"): Promise<LedgerS
     if (tx) proofTxByRef.set(key, tx);
   }
 
-  const proofs: LedgerProof[] = filterVerifiedProofs(
+  const proofs: LedgerProof[] = ledgerRows(
     rawProofs.map((proof) =>
       toLedgerProof(proof, proofTxByRef.get(proof.refId.toLowerCase()) ?? null),
     ),
@@ -532,8 +509,6 @@ export async function lookupProof(
       await readProofByRef(client, address, query, undefined, network),
       networkId,
     );
-    const rejected = rejectLookup(proof, query);
-    if (rejected) return rejected;
     return {
       status: "found",
       query,
@@ -559,8 +534,6 @@ export async function lookupProof(
         await readProofByRef(client, address, match.args.refId, receipt.transactionHash, network),
         networkId,
       );
-      const rejected = rejectLookup(proof, query);
-      if (rejected) return rejected;
       return {
         status: "found",
         query,
@@ -602,8 +575,6 @@ export async function lookupProof(
           (await findProofTxNear(client, address, raw.refId, Number(raw.recordedAt), network)) ??
           (await findProofTxByRef(client, address, raw.refId, network));
         const proof = await withPayment(toLedgerProof(raw, proofTxHash), networkId);
-        const rejected = rejectLookup(proof, query);
-        if (rejected) return rejected;
         return {
           status: "found",
           query,
@@ -645,10 +616,6 @@ export async function fetchProofByRefId(
   });
   if (!exists) return { status: "not_found" };
   const proof = await withPayment(await readProofByRef(client, address, refId, undefined, network), networkId);
-  const verdict = refVerdict(proof);
-  if (!verdict.ok) {
-    return { status: "rejected", code: verdict.code, message: settlementRefMessage(verdict.code) };
-  }
   return { status: "found", proof };
 }
 

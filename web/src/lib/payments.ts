@@ -21,9 +21,9 @@ import {
 } from "viem";
 import { getNetwork, isTempoNetwork, type NetworkId, type TempoNetworkId } from "./config";
 import { parseProofMemo } from "./proof-memo";
+import { isAllowlistedTempoToken, tempoLedgerTokenSymbol, type TempoLedgerNetwork } from "./tempo-tokens";
 
 export const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
-const TIP20_PREFIX = "0x20c000000000000000000000";
 const TEMPO_CHAIN_IDS = [42431, 4217];
 
 function tempoChainIds(): Set<number> {
@@ -103,7 +103,7 @@ export function findPaymentTransfer(
     const tokenOk =
       network === "base"
         ? isAddressEqual(log.address, BASE_USDC)
-        : log.address.toLowerCase().startsWith(TIP20_PREFIX);
+        : isAllowlistedTempoToken(network, log.address);
     if (!tokenOk) continue;
     try {
       const ev = decodeEventLog({ abi: transferAbi, data: log.data, topics: log.topics as [Hex, ...Hex[]] });
@@ -157,9 +157,12 @@ export async function resolvePayment(args: {
       return { ...source, payer: null, token: null, check: "mismatch" };
     }
     const hit = findPaymentTransfer(receipt.logs, source.network, args.payee, args.amountUSDC);
-    return hit
-      ? { ...source, payer: hit.payer, token: hit.token, check: "matched" }
-      : { ...source, payer: null, token: null, check: "mismatch" };
+    if (!hit) return { ...source, payer: null, token: null, check: "mismatch" };
+    const tokenSymbol =
+      source.network === "base"
+        ? source.tokenSymbol
+        : (tempoLedgerTokenSymbol(source.network as TempoLedgerNetwork, hit.token) ?? source.tokenSymbol);
+    return { ...source, tokenSymbol, payer: hit.payer, token: hit.token, check: "matched" };
   } catch {
     return { ...source, payer: null, token: null, check: "unavailable" };
   }

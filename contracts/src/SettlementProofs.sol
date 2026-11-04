@@ -14,6 +14,9 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 ///      `refId` is bound to the payment. It must equal
 ///      `canonicalRefId(srcTxHash, payee, amountUSDC)`, which is also a field of
 ///      `payloadHash`. A second record with that refId reverts (replay).
+///      This binding is enforced by this source. Registries deployed before it
+///      was added still accept any unique refId; the recorder enforces the
+///      binding until those registries are redeployed.
 ///      No Circle x402 / Arc settlement rail in this registry path (1B is out of scope).
 contract SettlementProofs is AccessControl {
     bytes32 public constant RECORDER_ROLE = keccak256("RECORDER_ROLE");

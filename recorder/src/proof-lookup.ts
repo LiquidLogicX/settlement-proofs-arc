@@ -10,6 +10,17 @@
 import type { Address, Hex } from "viem";
 import { settlementProofsAbi } from "./abi.js";
 
+/** One row of the append-only registry index (`getProofAt`). */
+export type IndexedProof = {
+  refId: Hex;
+  payee: Address;
+  amountUSDC: bigint;
+  paidAt: bigint | number;
+  srcTxHash: Hex;
+  memo: string;
+  recordedAt: bigint | number;
+};
+
 /** Max getProofAt reads when resolving a refId → proofId (newest first). */
 export const PROOF_INDEX_SCAN_LIMIT = 1024;
 
@@ -147,4 +158,38 @@ export async function findProofTxHash(
     toBlock = fromBlock - 1n;
   }
   return null;
+}
+
+/**
+ * Every proof currently in the registry index, oldest first.
+ * Replay checks fail closed: an index larger than `scanLimit` throws instead
+ * of silently ignoring older rows.
+ */
+export async function listIndexedProofs(
+  client: ArcReader,
+  address: Address,
+  scanLimit = PROOF_INDEX_SCAN_LIMIT,
+): Promise<IndexedProof[]> {
+  const count = (await client.readContract({
+    address,
+    abi: settlementProofsAbi,
+    functionName: "proofCount",
+  })) as bigint;
+  if (count > BigInt(scanLimit)) {
+    throw Object.assign(
+      new Error(`Settlement proof index has ${count} rows, above the ${scanLimit} scan cap`),
+      { status: 503, code: "REGISTRY_READ_FAILED" },
+    );
+  }
+  const proofs: IndexedProof[] = [];
+  for (let i = 0n; i < count; i++) {
+    const proof = (await client.readContract({
+      address,
+      abi: settlementProofsAbi,
+      functionName: "getProofAt",
+      args: [i],
+    })) as IndexedProof;
+    proofs.push(proof);
+  }
+  return proofs;
 }

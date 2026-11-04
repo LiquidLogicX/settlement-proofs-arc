@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ProofFieldList } from "@/components/proof-details";
+import { LegacyRefBadge, ProofFieldList } from "@/components/proof-details";
 import { ProofExplorerLinks } from "@/components/proof-links";
 import { paymentOf } from "@/lib/payments";
 import {
@@ -266,6 +266,7 @@ function FoundProof({
               {selfTestBadgeLabel(networkId)}
             </Badge>
           ) : null}
+          <LegacyRefBadge legacy={proof.legacy} />
           <span className="text-xs text-muted-foreground">{KIND_LABEL[queryKind]}</span>
         </div>
         {isTempoSyntheticSelfTest({ networkId, selfTest, refId: proof.refId }) ? (
